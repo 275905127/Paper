@@ -30,6 +30,8 @@ jobs:
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
           xcrun --sdk iphoneos --show-sdk-build-version
+          test "$(xcodebuild -version | awk '/Build version/{print $3}')" = "$EXPECTED_XCODE_BUILD"
+          test "$(xcrun --sdk iphoneos --show-sdk-version)" = "$EXPECTED_SDK"
           command -v xcodegen >/dev/null || brew install xcodegen
           xcodegen generate
 
