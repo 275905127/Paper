@@ -14,24 +14,26 @@ struct WallpaperDetailView: View {
     }
 
     var body: some View {
-        AsyncImage(url: wallpaper.path) { phase in
-            switch phase {
-            case .success(let image):
-                image.resizable().scaledToFit()
-            case .failure:
-                ContentUnavailableView("原图加载失败", systemImage: "photo.badge.exclamationmark")
-            default:
-                // 原图较大时，先显示已缓存的缩略图兜底
-                AsyncImage(url: wallpaper.thumbLarge) { thumb in
-                    thumb.resizable().scaledToFit()
-                } placeholder: {
-                    Color.clear
+        ZoomableImage(aspectRatio: CGFloat(wallpaper.aspectRatio)) {
+            AsyncImage(url: wallpaper.path) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().scaledToFit()
+                case .failure:
+                    ContentUnavailableView("原图加载失败", systemImage: "photo.badge.exclamationmark")
+                default:
+                    // 原图较大时，先显示已缓存的缩略图兜底
+                    AsyncImage(url: wallpaper.thumbLarge) { thumb in
+                        thumb.resizable().scaledToFit()
+                    } placeholder: {
+                        Color.clear
+                    }
+                    .overlay { ProgressView() }
                 }
-                .overlay { ProgressView() }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.black)
+        .background(Color.white)
         .ignoresSafeArea()
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

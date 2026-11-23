@@ -11,7 +11,8 @@ struct WallpaperThumbnail: View {
                 AsyncImage(url: wallpaper.thumbLarge) { phase in
                     switch phase {
                     case .success(let image):
-                        image.resizable().scaledToFit()
+                        // 格子比例与图片比例一致，用 fill 填满，避免露出底色。
+                        image.resizable().scaledToFill()
                     case .failure:
                         Image(systemName: "photo")
                             .font(.title)
