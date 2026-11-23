@@ -23,11 +23,20 @@ final class FeedStore {
     private var task: Task<Void, Never>?
     /// 每次重置自增，用于丢弃过期请求的结果。
     private var generation = 0
+    /// 筛选的保存范围，如 "discover" / "search"。
+    private let scope: String
 
-    init(source: any WallpaperSource, credentials: CredentialStore, query: Query? = nil) {
+    init(source: any WallpaperSource, credentials: CredentialStore, scope: String) {
         self.source = source
         self.credentials = credentials
-        self.query = query ?? Query(filters: source.defaultFilters)
+        self.scope = scope
+        self.query = Query(filters: FilterPersistence.restored(scope: scope, source: source))
+    }
+
+    /// 应用并保存新的筛选条件。
+    func applyFilters(_ filters: FilterState) {
+        query.filters = filters
+        FilterPersistence.save(filters, scope: scope, sourceID: source.id)
     }
 
     var isLoading: Bool { phase == .loading }
@@ -35,7 +44,9 @@ final class FeedStore {
     /// 切换图源：筛选恢复该图源的默认值，并重新加载。
     func switchSource(_ newSource: any WallpaperSource) async {
         source = newSource
-        query = Query(keyword: query.keyword, filters: newSource.defaultFilters)
+        // 切换图源：恢复该图源上次保存的筛选，没有就用默认值。
+        query = Query(keyword: query.keyword,
+                      filters: FilterPersistence.restored(scope: scope, source: newSource))
         await reset()
     }
 

@@ -5,7 +5,7 @@ struct Wallpaper: Identifiable, Hashable, Codable, Sendable {
     let id: String
     let url: URL            // 网页地址
     let path: URL           // 原图
-    let thumbLarge: URL     // 列表缩略图
+    let thumbLarge: URL     // 列表缩略图（保持原图比例）
     let thumbSmall: URL
     let width: Int
     let height: Int
@@ -43,7 +43,11 @@ struct Wallpaper: Identifiable, Hashable, Codable, Sendable {
         id = try c.decode(String.self, forKey: .id)
         url = try c.decode(URL.self, forKey: .url)
         path = try c.decode(URL.self, forKey: .path)
-        thumbLarge = try c.decode(URL.self, forKey: .thumbLarge)
+        // 旧版收藏存的是固定 16:9 的 /lg/ 缩略图，会把竖图压扁；
+        // Wallhaven 的 /orig/ 缩略图与 /lg/ 路径结构相同，直接换段即可得到保持比例的版本。
+        let storedThumb = try c.decode(URL.self, forKey: .thumbLarge)
+        let upgraded = storedThumb.absoluteString.replacingOccurrences(of: "/lg/", with: "/orig/")
+        thumbLarge = URL(string: upgraded) ?? storedThumb
         thumbSmall = try c.decode(URL.self, forKey: .thumbSmall)
         width = try c.decode(Int.self, forKey: .width)
         height = try c.decode(Int.self, forKey: .height)
@@ -65,6 +69,8 @@ extension Wallpaper {
         struct Thumbs: Decodable, Sendable {
             let large: URL
             let small: URL
+            /// 保持原图比例的缩略图（最长边 300）。large/small 是固定的 16:9 与 3:2，会把竖图压扁。
+            let original: URL
         }
         let id: String
         let url: URL
@@ -83,7 +89,7 @@ extension Wallpaper {
         func model(sourceID: String) -> Wallpaper {
             Wallpaper(
                 id: id, url: url, path: path,
-                thumbLarge: thumbs.large, thumbSmall: thumbs.small,
+                thumbLarge: thumbs.original, thumbSmall: thumbs.small,
                 width: dimension_x, height: dimension_y,
                 fileSize: file_size, fileType: file_type ?? "image/jpeg",
                 category: category, views: views, favorites: favorites,

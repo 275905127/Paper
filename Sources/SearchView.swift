@@ -11,7 +11,7 @@ struct SearchView: View {
     @Namespace private var namespace
 
     init(credentials: CredentialStore, source: any WallpaperSource) {
-        _store = State(initialValue: FeedStore(source: source, credentials: credentials))
+        _store = State(initialValue: FeedStore(source: source, credentials: credentials, scope: "search"))
     }
 
     var body: some View {
@@ -53,7 +53,7 @@ struct SearchView: View {
                     current: store.query.filters,
                     hasCredential: credentials.isSet(store.source.id)
                 ) { newFilters in
-                    store.query.filters = newFilters
+                    store.applyFilters(newFilters)
                     if !store.query.keyword.isEmpty { Task { await store.reset() } }
                 }
                 .presentationDetents([.large])
