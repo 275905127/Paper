@@ -16,19 +16,28 @@ final class FeedStore {
     private(set) var hasMore = true
 
     var query: Query
-    private let source: any WallpaperSource
+    private(set) var source: any WallpaperSource
+    private let credentials: CredentialStore
     private var nextPage = 1
     private var seen = Set<String>()
     private var task: Task<Void, Never>?
     /// 每次重置自增，用于丢弃过期请求的结果。
     private var generation = 0
 
-    init(source: any WallpaperSource, query: Query = Query()) {
+    init(source: any WallpaperSource, credentials: CredentialStore, query: Query? = nil) {
         self.source = source
-        self.query = query
+        self.credentials = credentials
+        self.query = query ?? Query(filters: source.defaultFilters)
     }
 
     var isLoading: Bool { phase == .loading }
+
+    /// 切换图源：筛选恢复该图源的默认值，并重新加载。
+    func switchSource(_ newSource: any WallpaperSource) async {
+        source = newSource
+        query = Query(keyword: query.keyword, filters: newSource.defaultFilters)
+        await reset()
+    }
 
     /// 首次进入时加载；已有内容则不重复请求。
     func loadIfNeeded() {
@@ -63,17 +72,23 @@ final class FeedStore {
     @discardableResult
     private func startLoad() -> Task<Void, Never>? {
         guard hasMore, phase != .loading else { return nil }
-        if query.categories.isEmpty {
-            phase = .failed("请至少选择一个分类")
+
+        if let spec = source.credential, !spec.optional,
+           credentials.value(for: source.id) == nil {
+            phase = .failed(SourceError.missingCredential.localizedDescription)
             return nil
         }
+
         phase = .loading
         let page = nextPage
         let query = query
         let token = generation
-        let work = Task { [source] in
+        let source = source
+        let key = credentials.value(for: source.id)
+
+        let work = Task {
             do {
-                let result = try await source.page(page, query: query)
+                let result = try await source.page(page, query: query, credential: key)
                 guard token == generation else { return }
                 let fresh = result.items.filter { seen.insert($0.id).inserted }
                 items.append(contentsOf: fresh)

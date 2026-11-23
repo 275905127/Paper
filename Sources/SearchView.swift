@@ -1,13 +1,17 @@
 import SwiftUI
 
 /// 搜索页：作为 TabView 的搜索角色，由系统呈现为独立的玻璃搜索入口。
+/// 沿用当前图源；筛选条件与发现页各自独立，搜索时可单独调整。
 struct SearchView: View {
+    @Environment(CredentialStore.self) private var credentials
+    @Environment(AppSettings.self) private var settings
     @State private var store: FeedStore
     @State private var text = ""
+    @State private var showFilter = false
     @Namespace private var namespace
 
-    init(source: any WallpaperSource) {
-        _store = State(initialValue: FeedStore(source: source))
+    init(credentials: CredentialStore, source: any WallpaperSource) {
+        _store = State(initialValue: FeedStore(source: source, credentials: credentials))
     }
 
     var body: some View {
@@ -15,10 +19,10 @@ struct SearchView: View {
             ScrollView {
                 if store.query.keyword.isEmpty {
                     suggestions
-                } else if store.items.isEmpty && store.phase == .idle {
-                    ContentUnavailableView.search(text: store.query.keyword)
                 } else if store.items.isEmpty, case .failed(let message) = store.phase {
                     ContentUnavailableView("搜索失败", systemImage: "wifi.exclamationmark", description: Text(message))
+                } else if store.items.isEmpty && store.phase == .idle {
+                    ContentUnavailableView.search(text: store.query.keyword)
                 } else if store.items.isEmpty {
                     ProgressView().padding(.top, 80)
                 } else {
@@ -36,11 +40,36 @@ struct SearchView: View {
                 WallpaperDetailView(wallpaper: wallpaper)
                     .navigationTransition(.zoom(sourceID: wallpaper.id, in: namespace))
             }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("筛选", systemImage: "line.3.horizontal.decrease") {
+                        showFilter = true
+                    }
+                }
+            }
+            .sheet(isPresented: $showFilter) {
+                FilterSheet(
+                    source: store.source,
+                    current: store.query.filters,
+                    hasCredential: credentials.isSet(store.source.id)
+                ) { newFilters in
+                    store.query.filters = newFilters
+                    if !store.query.keyword.isEmpty { Task { await store.reset() } }
+                }
+                .presentationDetents([.large])
+            }
             .searchable(text: $text, prompt: "搜索壁纸，如 city、forest")
             .onSubmit(of: .search) { run(text) }
             .onChange(of: text) { _, newValue in
-                // 清空搜索框时回到建议页
                 if newValue.isEmpty, !store.query.keyword.isEmpty { run("") }
+            }
+            .onChange(of: settings.selectedSourceID) {
+                if let source = SourceCatalog.source(id: settings.selectedSourceID) {
+                    Task { await store.switchSource(source) }
+                }
+            }
+            .onChange(of: credentials.revision) {
+                if !store.query.keyword.isEmpty { Task { await store.reset() } }
             }
         }
     }

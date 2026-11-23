@@ -3,31 +3,36 @@ import SwiftUI
 @main
 struct PaperApp: App {
     @State private var favorites = FavoritesStore()
+    @State private var credentials = CredentialStore()
+    @State private var settings = AppSettings()
 
     var body: some Scene {
         WindowGroup {
-            RootView()
+            RootView(credentials: credentials, settings: settings)
                 .environment(favorites)
+                .environment(credentials)
+                .environment(settings)
         }
     }
 }
 
 struct RootView: View {
-    private let source = SourceCatalog.default
+    let credentials: CredentialStore
+    let settings: AppSettings
 
     var body: some View {
         TabView {
             Tab("发现", systemImage: "sparkles.rectangle.stack") {
-                DiscoverView(source: source)
+                DiscoverView(credentials: credentials, source: settings.selectedSource)
             }
             Tab("图源", systemImage: "square.stack.3d.up") {
-                SourcesView(sources: SourceCatalog.all)
+                SourcesView()
             }
             Tab("收藏", systemImage: "heart") {
                 FavoritesView()
             }
-            Tab(role: .search) {
-                SearchView(source: source)
+            Tab("搜索", systemImage: "magnifyingglass", role: .search) {
+                SearchView(credentials: credentials, source: settings.selectedSource)
             }
         }
     }

@@ -129,7 +129,7 @@ struct InfoSheet: View {
                 }
                 Section {
                     Link(destination: wallpaper.url) {
-                        Label("在 Wallhaven 中打开", systemImage: "safari")
+                        Label("在 \(sourceName) 中打开", systemImage: "safari")
                     }
                 }
                 Section {
