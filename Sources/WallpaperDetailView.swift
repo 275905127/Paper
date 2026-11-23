@@ -132,10 +132,12 @@ struct InfoSheet: View {
                         Label("在 Wallhaven 中打开", systemImage: "safari")
                     }
                 }
-                Section("如何设为壁纸") {
+                Section {
                     Label("先点“保存”存入相册", systemImage: "1.circle")
                     Label("打开系统“设置 > 墙纸”", systemImage: "2.circle")
                     Label("选择“照片”并选中这张图", systemImage: "3.circle")
+                } header: {
+                    Text("如何设为壁纸")
                 } footer: {
                     Text("iOS 不允许第三方 App 直接设置壁纸，需要在系统设置中完成最后一步。")
                 }

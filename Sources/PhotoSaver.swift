@@ -39,7 +39,9 @@ enum PhotoSaver {
             throw SaveError.download
         }
 
-        guard UIImage(data: data) != nil else { throw SaveError.decode }
+        guard let imageSource = CGImageSourceCreateWithData(data as CFData, nil),
+              CGImageSourceGetCount(imageSource) > 0
+        else { throw SaveError.decode }
 
         try await PHPhotoLibrary.shared().performChanges {
             let options = PHAssetResourceCreationOptions()
