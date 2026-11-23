@@ -152,6 +152,10 @@ struct InfoSheet: View {
         }
     }
 
+    private var sourceName: String {
+        SourceCatalog.source(id: wallpaper.sourceID)?.name ?? "来源网站"
+    }
+
     private var categoryTitle: String {
         switch wallpaper.category {
         case "general": "综合"
