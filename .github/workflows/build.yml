@@ -1,0 +1,82 @@
+name: Build IPA
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ipa-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 40
+    env:
+      APP_NAME: "Paper"
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: 记录工具链并生成工程
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+          xcrun --sdk iphoneos --show-sdk-build-version
+          command -v xcodegen >/dev/null || brew install xcodegen
+          xcodegen generate
+
+      - name: 编译未签名真机应用
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          xcodebuild \
+            -project "$APP_NAME.xcodeproj" \
+            -scheme "$APP_NAME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build/xcodebuild.log
+
+      - name: 编译错误摘要
+        if: failure()
+        run: |
+          if [[ -f build/xcodebuild.log ]]; then
+            echo '## 编译错误' >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            LC_ALL=C grep -E -m 80 '(error:|fatal error:)' build/xcodebuild.log >> "$GITHUB_STEP_SUMMARY" || true
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: 打包并检查未签名 IPA
+        run: |
+          set -euo pipefail
+          app="build/Build/Products/Release-iphoneos/$APP_NAME.app"
+          test -s "$app/Info.plist"
+          executable=$(/usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "$app/Info.plist")
+          test -s "$app/$executable"
+          test "$(/usr/libexec/PlistBuddy -c 'Print DTPlatformName' "$app/Info.plist")" = iphoneos
+          test ! -e "$app/_CodeSignature/CodeResources"
+          mkdir -p build/package/Payload build/artifacts
+          ditto "$app" "build/package/Payload/$APP_NAME.app"
+          ditto -c -k --keepParent --norsrc build/package/Payload "build/artifacts/$APP_NAME.ipa"
+          unzip -tq "build/artifacts/$APP_NAME.ipa"
+          shasum -a 256 "build/artifacts/$APP_NAME.ipa"
+
+      - name: 仅上传至 Actions 构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-ipa-${{ github.run_attempt }}
+          path: build/artifacts/${{ env.APP_NAME }}.ipa
+          retention-days: 7
+          if-no-files-found: error
+          compression-level: 0
