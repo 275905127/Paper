@@ -14,15 +14,22 @@ struct PasteSourceSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("壁纸网站或接口") {
-                    TextField("https://…", text: $address).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    Button("识别地址") { ticket = UUID() }.disabled(address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || ticket != nil)
+                Section {
+                    TextField("粘贴地址或规则", text: $address, axis: .vertical).lineLimit(1...8).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    Button(SourceRule.looksLikeRule(address) ? "导入规则" : "识别地址") { run() }.disabled(address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || ticket != nil)
                     if ticket != nil { ProgressView("正在识别…") }
                     if !message.isEmpty { Text(message) }
+                } header: {
+                    Text("壁纸网站、接口或规则")
+                } footer: {
+                    Text("以 { 开头的内容按规则导入，包含图源和筛选项；其余内容按地址识别。")
                 }
                 if var config = candidate {
                     Section("识别结果") {
                         LabeledContent("类型", value: config.randomImage == true ? "图片直链" : "JSON 列表")
+                        if !config.usableFilters.isEmpty {
+                            LabeledContent("筛选项", value: config.usableFilters.map(\.title).joined(separator: "、"))
+                        }
                         TextField("图源名称", text: $name)
                         ForEach(Array(previews.prefix(3).enumerated()), id: \.offset) { _, url in
                             SnapshotImage(url: url, maxPixels: 600) { phase in
@@ -66,6 +73,18 @@ struct PasteSourceSheet: View {
             .sheet(item: $manual) { initial in
                 SourceConfigEditor(initial: initial) { c in save(c) }
             }
+        }
+    }
+    /// 规则直接解析，不发网络请求；其余文本按地址探测。
+    private func run() {
+        if SourceRule.looksLikeRule(address) {
+            do {
+                let config = try SourceRule.parse(address)
+                if duplicate(config) { message = "此接口已在图源列表中。" }
+                else { candidate = config; name = config.name; previews = []; message = "规则有效，确认后添加。" }
+            } catch { message = error.localizedDescription }
+        } else {
+            ticket = UUID()
         }
     }
     private func duplicate(_ c: JSONSourceConfig) -> Bool { settings.configs.contains { $0.endpoint == c.endpoint } }
