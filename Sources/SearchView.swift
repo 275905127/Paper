@@ -12,6 +12,7 @@ struct SearchView: View {
     private func saveHistory(_ terms: [String]) {
         if let data = try? JSONEncoder().encode(Array(terms.prefix(12))) { historyData = data }
     }
+    @State private var initialDrawer = true
     @State private var text = ""
     @State private var showFilter = false
 
@@ -22,7 +23,9 @@ struct SearchView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                if store.query.keyword.isEmpty {
+                if !store.source.capabilities.contains(.search) {
+                    ContentUnavailableView("此图源不支持搜索", systemImage: "magnifyingglass", description: Text("可在发现页浏览，或在图源设置中配置关键词参数。"))
+                } else if store.query.keyword.isEmpty {
                     suggestions
                 } else if store.items.isEmpty, case .failed(let message) = store.phase {
                     ContentUnavailableView("搜索失败", systemImage: "wifi.exclamationmark", description: Text(message))
@@ -38,12 +41,19 @@ struct SearchView: View {
                     FeedFooter(store: store)
                 }
             }
+            // Initially request the expanded drawer. On user scrolling, return control to the system.
+            .onScrollPhaseChange { _, phase in
+                if phase == .interacting { initialDrawer = false }
+            }
+            .onAppear { initialDrawer = true }
             .scrollEdgeEffectStyle(.soft, for: .top)
             .navigationTitle("搜索")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
+                    if !store.source.filterFields.isEmpty {
                     Button("筛选", systemImage: "line.3.horizontal.decrease") {
                         showFilter = true
+                    }
                     }
                 }
             }
@@ -58,13 +68,13 @@ struct SearchView: View {
                 }
                 .presentationDetents([.large])
             }
-            .searchable(text: $text, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索壁纸，如 city、forest")
+            .searchable(text: $text, placement: .navigationBarDrawer(displayMode: initialDrawer ? .always : .automatic), prompt: "搜索壁纸，如 city、forest")
             .onSubmit(of: .search) { run(text) }
             .onChange(of: text) { _, newValue in
                 if newValue.isEmpty, !store.query.keyword.isEmpty { run("") }
             }
-            .onChange(of: settings.selectedSourceID) {
-                if let source = SourceCatalog.source(id: settings.selectedSourceID) {
+            .onChange(of: "\(settings.selectedSourceID):\(settings.revision)") {
+                if let source = settings.source(id: settings.selectedSourceID) {
                     Task { await store.switchSource(source) }
                 }
             }
@@ -112,6 +122,7 @@ struct SearchView: View {
     }
 
     private func run(_ keyword: String) {
+        guard store.source.capabilities.contains(.search) else { return }
         let term = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
         store.query.keyword = term
         guard !term.isEmpty else { return }

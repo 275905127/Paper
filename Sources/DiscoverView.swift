@@ -32,8 +32,10 @@ struct DiscoverView: View {
                     sourceMenu
                 }
                 ToolbarItem(placement: .topBarTrailing) {
+                    if !store.source.filterFields.isEmpty {
                     Button("筛选", systemImage: "line.3.horizontal.decrease") {
                         showFilter = true
+                    }
                     }
                 }
             }
@@ -53,8 +55,8 @@ struct DiscoverView: View {
             .onChange(of: credentials.revision) {
                 Task { await store.reset() }
             }
-            .onChange(of: settings.selectedSourceID) {
-                if let source = SourceCatalog.source(id: settings.selectedSourceID) {
+            .onChange(of: "\(settings.selectedSourceID):\(settings.revision)") {
+                if let source = settings.source(id: settings.selectedSourceID) {
                     Task { await store.switchSource(source) }
                 }
             }
@@ -66,7 +68,7 @@ struct DiscoverView: View {
         @Bindable var settings = settings
         return Menu {
             Picker("图源", selection: $settings.selectedSourceID) {
-                ForEach(SourceCatalog.all, id: \.id) { source in
+                ForEach(settings.allSources, id: \.id) { source in
                     Label(source.name, systemImage: source.symbol).tag(source.id)
                 }
             }

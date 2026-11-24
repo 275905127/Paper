@@ -113,6 +113,7 @@ struct WallpaperDetailView: View {
 
 /// 壁纸信息与“设为壁纸”的操作指引。
 struct InfoSheet: View {
+    @Environment(AppSettings.self) private var settings
     let wallpaper: Wallpaper
     @Environment(\.dismiss) private var dismiss
 
@@ -159,7 +160,7 @@ struct InfoSheet: View {
     }
 
     private var sourceName: String {
-        SourceCatalog.source(id: wallpaper.sourceID)?.name ?? "来源网站"
+        settings.source(id: wallpaper.sourceID)?.name ?? "来源网站"
     }
 
     private var categoryTitle: String {

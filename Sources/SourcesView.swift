@@ -6,12 +6,20 @@ struct SourcesView: View {
     @Environment(AppSettings.self) private var settings
     @State private var editing: (any WallpaperSource)?
 
+    @State private var editor: JSONSourceConfig?
+    @State private var removing: JSONSourceConfig?
+
     var body: some View {
         NavigationStack {
             List {
-                ForEach(SourceCatalog.all, id: \.id) { source in
+                ForEach(settings.allSources, id: \.id) { source in
                     Section {
                         row(for: source)
+                        if let config = settings.configs.first(where: { $0.id == source.id }) {
+                            Button("编辑接口", systemImage: "slider.horizontal.3") { editor = config }
+                                .swipeActions { Button("删除", role: .destructive) { removing = config } }
+                            Button("移除图源", role: .destructive) { removing = config }
+                        }
                     }
                 }
 
@@ -25,6 +33,14 @@ struct SourcesView: View {
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
             .navigationTitle("图源")
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("添加图源", systemImage: "plus") { editor = JSONSourceConfig() } } }
+            .sheet(item: $editor) { config in
+                SourceConfigEditor(initial: config) { settings.save($0) }
+            }
+            .alert("移除此图源？", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), presenting: removing) { config in
+                Button("移除", role: .destructive) { settings.remove(config) }
+                Button("取消", role: .cancel) { }
+            } message: { _ in Text("已收藏的壁纸不会被删除。") }
             .sheet(item: Binding(
                 get: { editing.map { AnySource(source: $0) } },
                 set: { editing = $0?.source }

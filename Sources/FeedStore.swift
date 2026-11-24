@@ -84,6 +84,7 @@ final class FeedStore {
     private func startLoad() -> Task<Void, Never>? {
         guard hasMore, phase != .loading else { return nil }
 
+        if scope == "search", query.keyword.isEmpty || !source.capabilities.contains(.search) { return nil }
         if let spec = source.credential, !spec.optional,
            credentials.value(for: source.id) == nil {
             phase = .failed(SourceError.missingCredential.localizedDescription)
@@ -103,7 +104,7 @@ final class FeedStore {
                 guard token == generation else { return }
                 let fresh = result.items.filter { seen.insert($0.id).inserted }
                 items.append(contentsOf: fresh)
-                hasMore = result.hasMore
+                hasMore = result.hasMore && !fresh.isEmpty
                 nextPage = page + 1
                 phase = .idle
             } catch is CancellationError {
