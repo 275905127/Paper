@@ -42,7 +42,6 @@ struct FilterField: Identifiable, Hashable, Sendable {
     /// 仅当另一个字段取某值时才显示，例如“时间范围”只在排序为“热门”时出现。
     var visibleWhen: Condition?
     var footer: String?
-    var quickAccess = false
 
     struct Condition: Hashable, Sendable {
         let fieldID: String

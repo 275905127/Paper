@@ -58,7 +58,7 @@ struct SearchView: View {
                 }
                 .presentationDetents([.large])
             }
-            .searchable(text: $text, prompt: "搜索壁纸，如 city、forest")
+            .searchable(text: $text, placement: .navigationBarDrawer(displayMode: .always), prompt: "搜索壁纸，如 city、forest")
             .onSubmit(of: .search) { run(text) }
             .onChange(of: text) { _, newValue in
                 if newValue.isEmpty, !store.query.keyword.isEmpty { run("") }

@@ -9,20 +9,21 @@ struct SourcesView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    ForEach(SourceCatalog.all, id: \.id) { source in
+                ForEach(SourceCatalog.all, id: \.id) { source in
+                    Section {
                         row(for: source)
                     }
-                } header: {
-                    Text("图源")
-                } footer: {
-                    Text("图片版权归原作者所有。壁纸从图源网站实时加载，受其可用性与限流影响。")
                 }
 
-                Section("关于") {
+                Section {
                     LabeledContent("版本", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "-")
+                } header: {
+                    Text("关于")
+                } footer: {
+                    Text("壁纸由图源网站提供，版权归原作者所有。")
                 }
             }
+            .scrollEdgeEffectStyle(.soft, for: .top)
             .navigationTitle("图源")
             .sheet(item: Binding(
                 get: { editing.map { AnySource(source: $0) } },
@@ -37,44 +38,43 @@ struct SourcesView: View {
     @ViewBuilder
     private func row(for source: any WallpaperSource) -> some View {
         let isCurrent = settings.selectedSourceID == source.id
-        VStack(alignment: .leading, spacing: 10) {
-            Button {
-                settings.selectedSourceID = source.id
-            } label: {
-                HStack {
-                    Label {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(source.name).foregroundStyle(.primary)
-                            Text(source.summary)
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
-                    } icon: {
-                        Image(systemName: source.symbol)
+        Button {
+            settings.selectedSourceID = source.id
+        } label: {
+            HStack {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(source.name).foregroundStyle(.primary)
+                        Text(source.summary)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
                     }
-                    Spacer()
-                    if isCurrent {
-                        Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
-                    }
+                } icon: {
+                    Image(systemName: source.symbol)
                 }
-            }
-            .buttonStyle(.plain)
-
-            if let spec = source.credential {
-                Button {
-                    editing = source
-                } label: {
-                    Label(
-                        credentials.isSet(source.id) ? "\(spec.label)：已设置" : "\(spec.label)：未设置",
-                        systemImage: credentials.isSet(source.id) ? "key.fill" : "key"
-                    )
-                    .font(.footnote)
+                Spacer()
+                if isCurrent {
+                    Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
                 }
-                .buttonStyle(.glass)
-                .controlSize(.small)
             }
         }
-        .padding(.vertical, 2)
+        .buttonStyle(.plain)
+
+        if let spec = source.credential {
+            Button {
+                editing = source
+            } label: {
+                LabeledContent {
+                    Text(credentials.isSet(source.id) ? "已设置" : "未设置")
+                        .foregroundStyle(.secondary)
+                } label: {
+                    Label(spec.label, systemImage: "key")
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("管理此图源的密钥")
+        }
     }
 }
 

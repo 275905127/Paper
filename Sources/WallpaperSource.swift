@@ -96,8 +96,7 @@ struct WallhavenSource: WallpaperSource {
                     .init(id: "views", title: "最多浏览"),
                     .init(id: "favorites", title: "最多收藏"),
                 ]),
-                defaultValue: .choice("toplist"),
-                quickAccess: true
+                defaultValue: .choice("toplist")
             ),
             FilterField(
                 id: "order", title: "顺序",
@@ -148,8 +147,7 @@ struct WallhavenSource: WallpaperSource {
                     .init(id: "1x1", title: "1:1"),
                     .init(id: "16x9", title: "16:9"),
                 ]),
-                defaultValue: .choice("portrait"),
-                quickAccess: true
+                defaultValue: .choice("portrait")
             ),
             FilterField(
                 id: "atleast", title: "最小分辨率",
