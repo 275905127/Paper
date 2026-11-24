@@ -26,11 +26,13 @@ enum PhotoSaver {
         request.timeoutInterval = 60
         let data: Data
         do {
+            if wallpaper.path.isFileURL { data = try Data(contentsOf: wallpaper.path) } else {
             let (body, response) = try await URLSession.shared.data(for: request)
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                 throw SaveError.download
             }
             data = body
+            }
         } catch is SaveError {
             throw SaveError.download
         } catch is CancellationError {
@@ -39,11 +41,14 @@ enum PhotoSaver {
             throw SaveError.download
         }
 
-        guard UIImage(data: data) != nil else { throw SaveError.decode }
+        guard let imageSource = CGImageSourceCreateWithData(data as CFData, nil),
+              CGImageSourceGetCount(imageSource) > 0
+        else { throw SaveError.decode }
 
+        let type = CGImageSourceGetType(imageSource) as String?
         try await PHPhotoLibrary.shared().performChanges {
             let options = PHAssetResourceCreationOptions()
-            options.uniformTypeIdentifier = wallpaper.fileType == "image/png" ? "public.png" : "public.jpeg"
+            options.uniformTypeIdentifier = type
             PHAssetCreationRequest.forAsset().addResource(with: .photo, data: data, options: options)
         }
     }

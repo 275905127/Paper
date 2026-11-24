@@ -14,11 +14,14 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 40
     env:
       APP_NAME: "Paper"
       HOMEBREW_NO_AUTO_UPDATE: '1'
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+      EXPECTED_XCODE_BUILD: 27A9275
+      EXPECTED_SDK: "27.1"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -30,6 +33,8 @@ jobs:
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
           xcrun --sdk iphoneos --show-sdk-build-version
+          test "$(xcodebuild -version | awk '/Build version/{print $3}')" = "$EXPECTED_XCODE_BUILD"
+          test "$(xcrun --sdk iphoneos --show-sdk-version)" = "$EXPECTED_SDK"
           command -v xcodegen >/dev/null || brew install xcodegen
           xcodegen generate
 

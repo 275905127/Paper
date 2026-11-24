@@ -5,7 +5,7 @@ struct Wallpaper: Identifiable, Hashable, Codable, Sendable {
     let id: String
     let url: URL            // 网页地址
     let path: URL           // 原图
-    let thumbLarge: URL     // 列表缩略图
+    let thumbLarge: URL     // 列表缩略图（保持原图比例）
     let thumbSmall: URL
     let width: Int
     let height: Int
@@ -16,21 +16,63 @@ struct Wallpaper: Identifiable, Hashable, Codable, Sendable {
     let favorites: Int
     let colors: [String]
     let source: String?
+    /// 所属图源 id，用于收藏跨图源展示。旧数据缺省为 wallhaven。
+    var sourceID: String = "wallhaven"
 
-    /// 宽高比（宽 / 高），用于占位，避免图片加载时网格跳动。
+    /// 宽高比（宽 / 高）。网格按真实比例显示整图。
     var aspectRatio: Double {
         height > 0 ? Double(width) / Double(height) : 0.5625
     }
 
+    var shareItem: URL { path.isFileURL ? path : url }
+
     var resolution: String { "\(width) × \(height)" }
+
+    init(id: String, url: URL, path: URL, thumbLarge: URL, thumbSmall: URL,
+         width: Int, height: Int, fileSize: Int, fileType: String, category: String,
+         views: Int, favorites: Int, colors: [String], source: String?, sourceID: String) {
+        self.id = id; self.url = url; self.path = path
+        self.thumbLarge = thumbLarge; self.thumbSmall = thumbSmall
+        self.width = width; self.height = height
+        self.fileSize = fileSize; self.fileType = fileType; self.category = category
+        self.views = views; self.favorites = favorites; self.colors = colors
+        self.source = source; self.sourceID = sourceID
+    }
+
+    // 兼容旧版收藏文件：没有 sourceID 字段时回退到 wallhaven。
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        url = try c.decode(URL.self, forKey: .url)
+        path = RandomImageSource.relocated(try c.decode(URL.self, forKey: .path))
+        // 旧版收藏存的是固定 16:9 的 /lg/ 缩略图，会把竖图压扁；
+        // Wallhaven 的 /orig/ 缩略图与 /lg/ 路径结构相同，直接换段即可得到保持比例的版本。
+        let storedThumb = try c.decode(URL.self, forKey: .thumbLarge)
+        let upgraded = storedThumb.absoluteString.replacingOccurrences(of: "/lg/", with: "/orig/")
+        thumbLarge = RandomImageSource.relocated(URL(string: upgraded) ?? storedThumb)
+        thumbSmall = RandomImageSource.relocated(try c.decode(URL.self, forKey: .thumbSmall))
+        width = try c.decode(Int.self, forKey: .width)
+        height = try c.decode(Int.self, forKey: .height)
+        fileSize = try c.decode(Int.self, forKey: .fileSize)
+        fileType = try c.decode(String.self, forKey: .fileType)
+        category = try c.decode(String.self, forKey: .category)
+        views = try c.decode(Int.self, forKey: .views)
+        favorites = try c.decode(Int.self, forKey: .favorites)
+        colors = try c.decode([String].self, forKey: .colors)
+        source = try c.decodeIfPresent(String.self, forKey: .source)
+        sourceID = try c.decodeIfPresent(String.self, forKey: .sourceID) ?? "wallhaven"
+    }
 }
 
+// MARK: - Wallhaven 原始响应
+
 extension Wallpaper {
-    /// Wallhaven 接口的原始字段 → 本地模型。
     struct Remote: Decodable, Sendable {
         struct Thumbs: Decodable, Sendable {
             let large: URL
             let small: URL
+            /// 保持原图比例的缩略图（最长边 300）。large/small 是固定的 16:9 与 3:2，会把竖图压扁。
+            let original: URL
         }
         let id: String
         let url: URL
@@ -46,15 +88,16 @@ extension Wallpaper {
         let colors: [String]
         let source: String?
 
-        var model: Wallpaper {
+        func model(sourceID: String) -> Wallpaper {
             Wallpaper(
                 id: id, url: url, path: path,
-                thumbLarge: thumbs.large, thumbSmall: thumbs.small,
+                thumbLarge: thumbs.original, thumbSmall: thumbs.small,
                 width: dimension_x, height: dimension_y,
                 fileSize: file_size, fileType: file_type ?? "image/jpeg",
                 category: category, views: views, favorites: favorites,
                 colors: colors,
-                source: (source?.isEmpty ?? true) ? nil : source
+                source: (source?.isEmpty ?? true) ? nil : source,
+                sourceID: sourceID
             )
         }
     }
@@ -67,37 +110,4 @@ extension Wallpaper {
         let data: [Remote]
         let meta: Meta
     }
-}
-
-/// 浏览排序，对应 Wallhaven 的 sorting 参数。
-enum Sorting: String, CaseIterable, Identifiable, Sendable {
-    case toplist, latest, random, views, favorites
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .toplist: "热门"
-        case .latest: "最新"
-        case .random: "随机"
-        case .views: "最多浏览"
-        case .favorites: "最多收藏"
-        }
-    }
-}
-
-/// 分类开关，对应 Wallhaven 的 categories 三位掩码（general / anime / people）。
-struct CategoryFilter: Hashable, Sendable {
-    var general = true
-    var anime = true
-    var people = true
-
-    var mask: String { "\(general ? 1 : 0)\(anime ? 1 : 0)\(people ? 1 : 0)" }
-    var isEmpty: Bool { !general && !anime && !people }
-}
-
-/// 一次查询的完整条件。条件变化即视为新的列表。
-struct Query: Hashable, Sendable {
-    var keyword = ""
-    var sorting: Sorting = .toplist
-    var categories = CategoryFilter()
 }

@@ -1,51 +1,83 @@
 import SwiftUI
 
-/// 发现页：当前图源的壁纸流，支持排序、分类、下拉刷新、无限滚动。
+/// 发现页：当前图源的壁纸流，支持图源切换、全功能筛选、下拉刷新、无限滚动。
 struct DiscoverView: View {
+    @Environment(CredentialStore.self) private var credentials
+    @Environment(AppSettings.self) private var settings
     @State private var store: FeedStore
     @State private var showFilter = false
-    @Namespace private var namespace
 
-    init(source: any WallpaperSource) {
-        _store = State(initialValue: FeedStore(source: source))
+    init(credentials: CredentialStore, source: any WallpaperSource) {
+        _store = State(initialValue: FeedStore(source: source, credentials: credentials, scope: "discover"))
     }
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                if store.items.isEmpty {
+                if store.source is RandomImageSource, let item = store.items.first {
+                    WallpaperGrid(items: [item])
+                    Button("换一张", systemImage: "arrow.clockwise") { Task { await store.reset() } }
+                        .buttonStyle(.bordered).padding()
+                } else if store.items.isEmpty {
                     emptyState
                 } else {
                     WallpaperGrid(
                         items: store.items,
-                        onReachEnd: { store.loadMoreIfNeeded(current: $0) },
-                        namespace: namespace
+                        onReachEnd: { store.loadMoreIfNeeded(current: $0) }
                     )
                     FeedFooter(store: store)
                 }
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
             .refreshable { await store.reset() }
-            .navigationTitle("发现")
-            .navigationDestination(for: Wallpaper.self) { wallpaper in
-                WallpaperDetailView(wallpaper: wallpaper)
-                    .navigationTransition(.zoom(sourceID: wallpaper.id, in: namespace))
-            }
+            .navigationTitle(store.source.name)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    sourceMenu
+                }
                 ToolbarItem(placement: .topBarTrailing) {
+                    if !store.source.filterFields.isEmpty {
                     Button("筛选", systemImage: "line.3.horizontal.decrease") {
                         showFilter = true
+                    }
                     }
                 }
             }
             .sheet(isPresented: $showFilter) {
-                FilterSheet(query: store.query) { newQuery in
-                    store.query = newQuery
+                FilterSheet(
+                    source: store.source,
+                    current: store.query.filters,
+                    hasCredential: credentials.isSet(store.source.id)
+                ) { newFilters in
+                    store.applyFilters(newFilters)
                     Task { await store.reset() }
                 }
-                .presentationDetents([.medium])
+                .presentationDetents([.large])
             }
             .task { store.loadIfNeeded() }
+            // 密钥变化后（例如刚填写 / 删除），按新权限重新加载
+            .onChange(of: credentials.revision) {
+                Task { await store.reset() }
+            }
+            .onChange(of: "\(settings.selectedSourceID):\(settings.revision)") {
+                if let source = settings.source(id: settings.selectedSourceID) {
+                    Task { await store.switchSource(source) }
+                }
+            }
+        }
+    }
+
+    /// 图源切换菜单。只有一个图源时也保留，让结构一致。
+    private var sourceMenu: some View {
+        @Bindable var settings = settings
+        return Menu {
+            Picker("图源", selection: $settings.selectedSourceID) {
+                ForEach(settings.allSources, id: \.id) { source in
+                    Label(source.name, systemImage: source.symbol).tag(source.id)
+                }
+            }
+        } label: {
+            Label("图源", systemImage: "square.stack.3d.up")
         }
     }
 
@@ -62,54 +94,16 @@ struct DiscoverView: View {
                     .buttonStyle(.glassProminent)
             }
             .containerRelativeFrame(.vertical) { height, _ in height * 0.7 }
+        case .idle where store.items.isEmpty && !store.hasMore:
+            ContentUnavailableView(
+                "没有符合条件的壁纸",
+                systemImage: "photo.on.rectangle.angled",
+                description: Text("试试放宽筛选条件。")
+            )
+            .containerRelativeFrame(.vertical) { height, _ in height * 0.7 }
         default:
             ProgressView()
                 .containerRelativeFrame(.vertical) { height, _ in height * 0.7 }
-        }
-    }
-}
-
-/// 排序与分类筛选。
-struct FilterSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var query: Query
-    let onApply: (Query) -> Void
-
-    init(query: Query, onApply: @escaping (Query) -> Void) {
-        _query = State(initialValue: query)
-        self.onApply = onApply
-    }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("排序") {
-                    Picker("排序", selection: $query.sorting) {
-                        ForEach(Sorting.allCases) { Text($0.title).tag($0) }
-                    }
-                    .pickerStyle(.inline)
-                    .labelsHidden()
-                }
-                Section("分类") {
-                    Toggle("综合", isOn: $query.categories.general)
-                    Toggle("动漫", isOn: $query.categories.anime)
-                    Toggle("人物", isOn: $query.categories.people)
-                }
-            }
-            .navigationTitle("筛选")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消", role: .cancel) { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("应用") {
-                        onApply(query)
-                        dismiss()
-                    }
-                    .disabled(query.categories.isEmpty)
-                }
-            }
         }
     }
 }

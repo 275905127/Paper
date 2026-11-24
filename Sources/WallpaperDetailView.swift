@@ -5,6 +5,7 @@ struct WallpaperDetailView: View {
     let wallpaper: Wallpaper
 
     @Environment(FavoritesStore.self) private var favorites
+    @Environment(\.dismiss) private var closePreview
     @State private var showInfo = false
     @State private var saveState: SaveState = .idle
 
@@ -14,27 +15,32 @@ struct WallpaperDetailView: View {
     }
 
     var body: some View {
-        AsyncImage(url: wallpaper.path) { phase in
-            switch phase {
-            case .success(let image):
-                image.resizable().scaledToFit()
-            case .failure:
-                ContentUnavailableView("原图加载失败", systemImage: "photo.badge.exclamationmark")
-            default:
-                // 原图较大时，先显示已缓存的缩略图兜底
-                AsyncImage(url: wallpaper.thumbLarge) { thumb in
-                    thumb.resizable().scaledToFit()
-                } placeholder: {
-                    Color.clear
+        ZoomableImage(aspectRatio: CGFloat(wallpaper.aspectRatio)) {
+            SnapshotImage(url: wallpaper.path, maxPixels: 4096) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().scaledToFit()
+                case .failure:
+                    ContentUnavailableView("原图加载失败", systemImage: "photo.badge.exclamationmark")
+                default:
+                    // 原图较大时，先显示已缓存的缩略图兜底
+                    if !wallpaper.path.isFileURL { AsyncImage(url: wallpaper.thumbLarge) { thumb in
+                        thumb.resizable().scaledToFit()
+                    } placeholder: {
+                        Color.clear
+                    }
+                    .overlay { ProgressView() } } else { ProgressView() }
                 }
-                .overlay { ProgressView() }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.black)
+        .background(Color.white)
         .ignoresSafeArea()
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(role: .close) { closePreview() }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button("信息", systemImage: "info.circle") { showInfo = true }
             }
@@ -49,7 +55,7 @@ struct WallpaperDetailView: View {
 
                 Spacer()
 
-                ShareLink(item: wallpaper.url) {
+                ShareLink(item: wallpaper.shareItem) {
                     Label("分享", systemImage: "square.and.arrow.up")
                 }
 
@@ -107,6 +113,7 @@ struct WallpaperDetailView: View {
 
 /// 壁纸信息与“设为壁纸”的操作指引。
 struct InfoSheet: View {
+    @Environment(AppSettings.self) private var settings
     let wallpaper: Wallpaper
     @Environment(\.dismiss) private var dismiss
 
@@ -129,13 +136,15 @@ struct InfoSheet: View {
                 }
                 Section {
                     Link(destination: wallpaper.url) {
-                        Label("在 Wallhaven 中打开", systemImage: "safari")
+                        Label("在 \(sourceName) 中打开", systemImage: "safari")
                     }
                 }
-                Section("如何设为壁纸") {
+                Section {
                     Label("先点“保存”存入相册", systemImage: "1.circle")
                     Label("打开系统“设置 > 墙纸”", systemImage: "2.circle")
                     Label("选择“照片”并选中这张图", systemImage: "3.circle")
+                } header: {
+                    Text("如何设为壁纸")
                 } footer: {
                     Text("iOS 不允许第三方 App 直接设置壁纸，需要在系统设置中完成最后一步。")
                 }
@@ -148,6 +157,10 @@ struct InfoSheet: View {
                 }
             }
         }
+    }
+
+    private var sourceName: String {
+        settings.source(id: wallpaper.sourceID)?.name ?? "来源网站"
     }
 
     private var categoryTitle: String {
