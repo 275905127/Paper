@@ -36,7 +36,6 @@ struct WallpaperGrid: View {
     let items: [Wallpaper]
     var onReachEnd: ((Wallpaper) -> Void)?
     var selection: Binding<Set<String>>?
-    let namespace: Namespace.ID
 
     private let spacing: CGFloat = 10
 
@@ -91,7 +90,6 @@ struct WallpaperGrid: View {
         } else {
             NavigationLink(value: wallpaper) {
                 WallpaperThumbnail(wallpaper: wallpaper)
-                    .matchedTransitionSource(id: wallpaper.id, in: namespace)
             }
             .buttonStyle(.plain)
         }

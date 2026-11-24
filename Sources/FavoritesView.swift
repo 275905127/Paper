@@ -6,7 +6,6 @@ struct FavoritesView: View {
     @State private var selection = Set<String>()
     @State private var isEditing = false
     @State private var confirmDelete = false
-    @Namespace private var namespace
 
     var body: some View {
         NavigationStack {
@@ -21,23 +20,29 @@ struct FavoritesView: View {
                 } else {
                     WallpaperGrid(
                         items: favorites.items,
-                        selection: isEditing ? $selection : nil,
-                        namespace: namespace
+                        selection: isEditing ? $selection : nil
                     )
                 }
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
             .navigationTitle("收藏")
-            .safeAreaInset(edge: .bottom) {
-                if isEditing {
-                    editBar
-                }
-            }
             .navigationDestination(for: Wallpaper.self) { wallpaper in
                 WallpaperDetailView(wallpaper: wallpaper)
-                    .navigationTransition(.zoom(sourceID: wallpaper.id, in: namespace))
             }
             .toolbar {
+                if isEditing {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button(selection.count == favorites.items.count ? "取消全选" : "全选") {
+                            selection = selection.count == favorites.items.count ? [] : Set(favorites.items.map(\.id))
+                        }
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("删除 \(selection.count) 张", systemImage: "trash", role: .destructive) {
+                            confirmDelete = true
+                        }
+                        .disabled(selection.isEmpty)
+                    }
+                }
                 if !favorites.items.isEmpty {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button(isEditing ? "完成" : "选择") {
@@ -61,28 +66,4 @@ struct FavoritesView: View {
         }
     }
 
-    /// 编辑模式下的底部操作栏。作为安全区插入，始终位于系统标签栏上方，两者不会叠在一起。
-    private var editBar: some View {
-        VStack(spacing: 0) {
-            Divider()
-            HStack {
-                Button("删除 \(selection.count) 张", systemImage: "trash", role: .destructive) {
-                    confirmDelete = true
-                }
-                .disabled(selection.isEmpty)
-                Spacer()
-                Button(selection.count == favorites.items.count ? "取消全选" : "全选") {
-                    if selection.count == favorites.items.count {
-                        selection.removeAll()
-                    } else {
-                        selection = Set(favorites.items.map(\.id))
-                    }
-                }
-            }
-            .buttonStyle(.borderless)
-            .padding(.horizontal)
-            .padding(.vertical, 10)
-            .background(.bar)
-        }
-    }
 }

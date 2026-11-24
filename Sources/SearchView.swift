@@ -8,7 +8,6 @@ struct SearchView: View {
     @State private var store: FeedStore
     @State private var text = ""
     @State private var showFilter = false
-    @Namespace private var namespace
 
     init(credentials: CredentialStore, source: any WallpaperSource) {
         _store = State(initialValue: FeedStore(source: source, credentials: credentials, scope: "search"))
@@ -28,8 +27,7 @@ struct SearchView: View {
                 } else {
                     WallpaperGrid(
                         items: store.items,
-                        onReachEnd: { store.loadMoreIfNeeded(current: $0) },
-                        namespace: namespace
+                        onReachEnd: { store.loadMoreIfNeeded(current: $0) }
                     )
                     FeedFooter(store: store)
                 }
@@ -38,7 +36,6 @@ struct SearchView: View {
             .navigationTitle("搜索")
             .navigationDestination(for: Wallpaper.self) { wallpaper in
                 WallpaperDetailView(wallpaper: wallpaper)
-                    .navigationTransition(.zoom(sourceID: wallpaper.id, in: namespace))
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
