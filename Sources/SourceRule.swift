@@ -1,20 +1,28 @@
 import Foundation
 
-/// 粘贴即用的图源规则。一段 JSON 就能描述一个图源及其筛选项，
-/// 不依赖网络探测，也不内置任何站点。
+/// 粘贴即用的图源规则。一段 JSON 描述一个完整图源：名称、类型、地址、
+/// 字段映射、搜索、分页和筛选项；也可以写成数组一次导入多个。
+/// 不依赖网络探测，不内置任何站点。
 ///
-///     {
-///       "name": "示例",
-///       "type": "random",              // random 随机直链；list JSON 列表（默认）
-///       "url": "https://example.com/api",
-///       "filters": [
-///         {"title": "方向", "param": "orient", "options": [["竖屏", "portrait"], ["横屏", "landscape"]]},
-///         {"title": "成人内容", "param": "adult", "toggle": "1"},
-///         {"title": "关键词", "param": "q", "text": true}
-///       ]
-///     }
+/// 通用字段
+///   name      图源名称（必填）
+///   url       HTTPS 接口地址（必填，不含账号密码）
+///   type      "list" JSON 列表（默认）｜ "random" 随机直链
+///   filters   筛选项数组，见下
 ///
-/// list 类型另可写 listPath、image、thumb、width、height、search、page。
+/// list 类型专用
+///   listPath  列表所在路径，顶层就是数组则不写，嵌套用点号，如 "data.items"
+///   image     每条记录里原图地址的路径（默认 "url"）
+///   thumb     缩略图路径
+///   width / height   宽、高路径
+///   search    关键词参数名（不写则不支持搜索）
+///   page      页码参数名（不写则不支持翻页）
+///
+/// 筛选项（三种写法选一种）
+///   {"title":"方向","param":"orient","options":[["竖屏","portrait"],["横屏","landscape"]]}
+///   {"title":"成人内容","param":"adult","toggle":"1"}
+///   {"title":"关键词","param":"q","text":true}
+///   options 里值留空表示“选它时不发送该参数”，第一项为默认。
 enum SourceRule {
     struct Failure: LocalizedError {
         let errorDescription: String?
@@ -23,18 +31,39 @@ enum SourceRule {
 
     /// 文本是否看起来像规则（以花括号开头）。
     static func looksLikeRule(_ text: String) -> Bool {
-        text.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("{")
+        let head = text.trimmingCharacters(in: .whitespacesAndNewlines).first
+        return head == "{" || head == "["
+    }
+
+    /// 解析一个对象或对象数组。
+    static func parseAll(_ text: String) throws -> [JSONSourceConfig] {
+        let cleaned = normalized(text)
+        guard let data = cleaned.data(using: .utf8), let root = try? JSONSerialization.jsonObject(with: data) else {
+            throw Failure("规则不是有效的 JSON，请检查括号、逗号和引号。")
+        }
+        let objects: [[String: Any]]
+        if let one = root as? [String: Any] { objects = [one] }
+        else if let many = root as? [[String: Any]], !many.isEmpty { objects = many }
+        else { throw Failure("规则必须是一个对象，或由对象组成的数组。") }
+        return try objects.enumerated().map { index, object in
+            do { return try build(object) }
+            catch let failure as Failure where objects.count > 1 { throw Failure("第 \(index + 1) 个图源：\(failure.localizedDescription)") }
+        }
     }
 
     static func parse(_ text: String) throws -> JSONSourceConfig {
-        // 粘贴时常带智能引号，先还原成直引号。
-        let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: "\u{201C}", with: "\"").replacingOccurrences(of: "\u{201D}", with: "\"")
-        guard let data = cleaned.data(using: .utf8),
-              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw Failure("规则不是有效的 JSON 对象，请检查括号、逗号和引号。")
-        }
+        guard let first = try parseAll(text).first else { throw Failure("规则为空。") }
+        return first
+    }
 
+    /// 粘贴常带智能引号和不可见空格，先还原。
+    private static func normalized(_ text: String) -> String {
+        text.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\u{201C}", with: "\"").replacingOccurrences(of: "\u{201D}", with: "\"")
+            .replacingOccurrences(of: "\u{00A0}", with: " ")
+    }
+
+    private static func build(_ root: [String: Any]) throws -> JSONSourceConfig {
         func string(_ key: String) -> String {
             (root[key] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         }
@@ -104,5 +133,34 @@ enum SourceRule {
         }
         config.customFilters = filters.isEmpty ? nil : filters
         return config
+    }
+
+    /// 把已有图源导出成可再次粘贴的规则文本。
+    static func export(_ configs: [JSONSourceConfig]) -> String {
+        let objects: [[String: Any]] = configs.map { c in
+            var o: [String: Any] = ["name": c.name, "url": c.endpoint]
+            if c.randomImage == true { o["type"] = "random" }
+            else {
+                if !c.listPath.isEmpty { o["listPath"] = c.listPath }
+                o["image"] = c.imagePath
+                for (key, value) in [("thumb", c.thumbPath), ("width", c.widthPath), ("height", c.heightPath),
+                                     ("search", c.searchParam), ("page", c.pageParam)] where !value.isEmpty { o[key] = value }
+            }
+            let filters: [[String: Any]] = c.usableFilters.map { f in
+                var item: [String: Any] = ["title": f.title, "param": f.cleanParam]
+                switch f.kind {
+                case .choice: item["options"] = f.choices.filter { !$0.title.isEmpty }.map { [$0.title, $0.value] }
+                case .toggle: item["toggle"] = f.onValue
+                case .text: item["text"] = true
+                }
+                return item
+            }
+            if !filters.isEmpty { o["filters"] = filters }
+            return o
+        }
+        let root: Any = objects.count == 1 ? objects[0] : objects
+        guard let data = try? JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]),
+              let text = String(data: data, encoding: .utf8) else { return "" }
+        return text
     }
 }

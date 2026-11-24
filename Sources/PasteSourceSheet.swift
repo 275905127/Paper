@@ -10,6 +10,7 @@ struct PasteSourceSheet: View {
     @State private var message = ""
     @State private var manual: JSONSourceConfig?
     @State private var name = ""
+    @State private var imported: [JSONSourceConfig] = []
 
     var body: some View {
         NavigationStack {
@@ -23,6 +24,17 @@ struct PasteSourceSheet: View {
                     Text("壁纸网站、接口或规则")
                 } footer: {
                     Text("以 { 开头的内容按规则导入，包含图源和筛选项；其余内容按地址识别。")
+                }
+                if !imported.isEmpty {
+                    Section("将添加 \(imported.count) 个图源") {
+                        ForEach(imported) { config in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(config.name)
+                                Text(summary(of: config)).font(.footnote).foregroundStyle(.secondary)
+                            }
+                        }
+                        Button("确认添加") { saveImported() }
+                    }
                 }
                 if var config = candidate {
                     Section("识别结果") {
@@ -54,7 +66,7 @@ struct PasteSourceSheet: View {
             }
             .navigationTitle("添加图源")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } } }
-            .onChange(of: address) { ticket = nil; candidate = nil; message = ""; previews = [] }
+            .onChange(of: address) { ticket = nil; candidate = nil; imported = []; message = ""; previews = [] }
             .task(id: ticket) { [id = ticket, text = address] in
                 guard let id else { return }
                 do {
@@ -77,16 +89,30 @@ struct PasteSourceSheet: View {
     }
     /// 规则直接解析，不发网络请求；其余文本按地址探测。
     private func run() {
-        if SourceRule.looksLikeRule(address) {
-            do {
-                let config = try SourceRule.parse(address)
-                if duplicate(config) { message = "此接口已在图源列表中。" }
-                else { candidate = config; name = config.name; previews = []; message = "规则有效，确认后添加。" }
-            } catch { message = error.localizedDescription }
-        } else {
-            ticket = UUID()
-        }
+        guard SourceRule.looksLikeRule(address) else { ticket = UUID(); return }
+        do {
+            let all = try SourceRule.parseAll(address)
+            let fresh = all.filter { !duplicate($0) }
+            imported = fresh
+            message = fresh.isEmpty ? "这些图源的接口都已存在。"
+                : fresh.count < all.count ? "已跳过 \(all.count - fresh.count) 个已存在的图源。" : "规则有效，确认后添加。"
+        } catch { message = error.localizedDescription }
     }
+
+    private func summary(of config: JSONSourceConfig) -> String {
+        var parts = [config.randomImage == true ? "随机直链" : "JSON 列表"]
+        if !config.searchParam.isEmpty { parts.append("搜索") }
+        if !config.pageParam.isEmpty { parts.append("翻页") }
+        let filters = config.usableFilters.map(\.title)
+        if !filters.isEmpty { parts.append("筛选：" + filters.joined(separator: "、")) }
+        return parts.joined(separator: " · ")
+    }
+
+    private func saveImported() {
+        for config in imported where !duplicate(config) { settings.save(config) }
+        dismiss()
+    }
+
     private func duplicate(_ c: JSONSourceConfig) -> Bool { settings.configs.contains { $0.endpoint == c.endpoint } }
     private func save(_ c: JSONSourceConfig) {
         if duplicate(c) { candidate = nil; message = "此接口已存在。"; return }

@@ -42,7 +42,14 @@ struct SourcesView: View {
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
             .navigationTitle("图源")
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("添加图源", systemImage: "plus") { adding = true } } }
+            .toolbar {
+                if !settings.configs.isEmpty {
+                    ToolbarItem(placement: .topBarLeading) {
+                        ShareLink("导出规则", item: SourceRule.export(settings.configs))
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) { Button("添加图源", systemImage: "plus") { adding = true } }
+            }
             .sheet(isPresented: $adding) { PasteSourceSheet() }
             .sheet(item: $editor) { config in
                 SourceConfigEditor(initial: config) { settings.save($0) }
