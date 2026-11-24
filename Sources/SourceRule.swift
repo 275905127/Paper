@@ -105,6 +105,7 @@ enum SourceRule {
             guard seen.insert(param).inserted else { throw Failure("参数名 \(param) 重复。") }
 
             var filter = CustomFilter()
+            filter.id = "rule.\(param)"
             filter.title = title
             filter.param = param
             if let options = raw["options"] as? [Any] {
@@ -116,6 +117,8 @@ enum SourceRule {
                         throw Failure("\(label)的选项必须写成 [\"显示名\",\"参数值\"]。")
                     }
                     var choice = CustomFilter.Choice()
+                    // 稳定 ID：重新导入同一规则后，已保存的筛选选择仍然有效。
+                    choice.id = "rule.\(param).\(filter.choices.count)"
                     choice.title = name
                     choice.value = value
                     filter.choices.append(choice)
