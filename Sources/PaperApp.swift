@@ -20,20 +20,24 @@ struct RootView: View {
     let credentials: CredentialStore
     let settings: AppSettings
 
+    private enum Page: Hashable { case discover, sources, favorites, search }
+    @State private var page: Page = .discover
+
     var body: some View {
-        TabView {
-            Tab("发现", systemImage: "sparkles.rectangle.stack") {
+        TabView(selection: $page) {
+            Tab("发现", systemImage: "sparkles.rectangle.stack", value: Page.discover) {
                 DiscoverView(credentials: credentials, source: settings.selectedSource)
             }
-            Tab("图源", systemImage: "square.stack.3d.up") {
+            Tab("图源", systemImage: "square.stack.3d.up", value: Page.sources) {
                 SourcesView()
             }
-            Tab("收藏", systemImage: "heart") {
+            Tab("收藏", systemImage: "heart", value: Page.favorites) {
                 FavoritesView()
             }
-            Tab("搜索", systemImage: "magnifyingglass", role: .search) {
+            Tab("搜索", systemImage: "magnifyingglass", value: Page.search, role: .search) {
                 SearchView(credentials: credentials, source: settings.selectedSource)
             }
         }
+        .sensoryFeedback(.selection, trigger: page)
     }
 }

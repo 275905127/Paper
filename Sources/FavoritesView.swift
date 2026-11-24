@@ -50,6 +50,17 @@ struct FavoritesView: View {
                     ToolbarItem(placement: .bottomBar) {
                         Button("移出收藏", systemImage: "trash", role: .destructive) { confirmDelete = true }
                             .disabled(selection.isEmpty)
+                            .confirmationDialog(
+                                "从收藏中移出 \(selection.count) 张？",
+                                isPresented: $confirmDelete,
+                                titleVisibility: .visible
+                            ) {
+                                Button("移出收藏", role: .destructive) {
+                                    favorites.remove(ids: selection)
+                                    selection.removeAll()
+                                    if favorites.items.isEmpty { isEditing = false }
+                                }
+                            }
                     }
                 }
                 if !favorites.items.isEmpty {
@@ -68,17 +79,7 @@ struct FavoritesView: View {
                         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showsSelection = false } } }
                 }
             }
-            .confirmationDialog(
-                "删除 \(selection.count) 张收藏？",
-                isPresented: $confirmDelete,
-                titleVisibility: .visible
-            ) {
-                Button("删除", role: .destructive) {
-                    favorites.remove(ids: selection)
-                    selection.removeAll()
-                    if favorites.items.isEmpty { isEditing = false }
-                }
-            }
+
         }
     }
 
