@@ -28,6 +28,11 @@ struct FavoritesView: View {
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
             .navigationTitle("收藏")
+            .safeAreaInset(edge: .bottom) {
+                if isEditing {
+                    editBar
+                }
+            }
             .navigationDestination(for: Wallpaper.self) { wallpaper in
                 WallpaperDetailView(wallpaper: wallpaper)
                     .navigationTransition(.zoom(sourceID: wallpaper.id, in: namespace))
@@ -39,14 +44,6 @@ struct FavoritesView: View {
                             isEditing.toggle()
                             selection.removeAll()
                         }
-                    }
-                }
-                if isEditing {
-                    ToolbarItem(placement: .bottomBar) {
-                        Button("删除", systemImage: "trash", role: .destructive) {
-                            confirmDelete = true
-                        }
-                        .disabled(selection.isEmpty)
                     }
                 }
             }
@@ -61,6 +58,31 @@ struct FavoritesView: View {
                     if favorites.items.isEmpty { isEditing = false }
                 }
             }
+        }
+    }
+
+    /// 编辑模式下的底部操作栏。作为安全区插入，始终位于系统标签栏上方，两者不会叠在一起。
+    private var editBar: some View {
+        VStack(spacing: 0) {
+            Divider()
+            HStack {
+                Button("删除 \(selection.count) 张", systemImage: "trash", role: .destructive) {
+                    confirmDelete = true
+                }
+                .disabled(selection.isEmpty)
+                Spacer()
+                Button(selection.count == favorites.items.count ? "取消全选" : "全选") {
+                    if selection.count == favorites.items.count {
+                        selection.removeAll()
+                    } else {
+                        selection = Set(favorites.items.map(\.id))
+                    }
+                }
+            }
+            .buttonStyle(.borderless)
+            .padding(.horizontal)
+            .padding(.vertical, 10)
+            .background(.bar)
         }
     }
 }
