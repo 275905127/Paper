@@ -6,6 +6,7 @@ struct SourcesView: View {
     @Environment(AppSettings.self) private var settings
     @State private var editing: (any WallpaperSource)?
 
+    @State private var adding = false
     @State private var editor: JSONSourceConfig?
     @State private var removing: JSONSourceConfig?
 
@@ -15,7 +16,7 @@ struct SourcesView: View {
                 Section {
                     ForEach(settings.allSources, id: \.id) { source in
                         row(for: source)
-                            .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 if source.credential != nil {
                                     Button("API 密钥", systemImage: "key") { editing = source }
                                         .tint(.blue)
@@ -28,7 +29,7 @@ struct SourcesView: View {
                             }
                     }
                 } footer: {
-                    Text("轻点切换图源，向右滑动显示管理操作。")
+                    Text("轻点切换图源，向左滑动显示管理操作。")
                 }
 
                 Section {
@@ -41,7 +42,8 @@ struct SourcesView: View {
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
             .navigationTitle("图源")
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("添加图源", systemImage: "plus") { editor = JSONSourceConfig() } } }
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("添加图源", systemImage: "plus") { adding = true } } }
+            .sheet(isPresented: $adding) { PasteSourceSheet() }
             .sheet(item: $editor) { config in
                 SourceConfigEditor(initial: config) { settings.save($0) }
             }
