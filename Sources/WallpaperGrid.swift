@@ -33,6 +33,7 @@ struct WallpaperThumbnail: View {
 /// 原生没有瀑布流容器，这里用两列 `LazyVStack` 并排，
 /// 并把每张图分配给当前较矮的一列，让两列高度尽量接近。
 struct WallpaperGrid: View {
+    @State private var preview: Wallpaper?
     let items: [Wallpaper]
     var onReachEnd: ((Wallpaper) -> Void)?
     var selection: Binding<Set<String>>?
@@ -52,6 +53,9 @@ struct WallpaperGrid: View {
             }
         }
         .padding(.horizontal, 12)
+        .fullScreenCover(item: $preview) { item in
+            NavigationStack { WallpaperDetailView(wallpaper: item) }
+        }
     }
 
     /// 按“高 / 宽”累计高度，把每张图放进当前最矮的一列。
@@ -88,7 +92,7 @@ struct WallpaperGrid: View {
             .buttonStyle(.plain)
             .accessibilityAddTraits(isSelected ? .isSelected : [])
         } else {
-            NavigationLink(value: wallpaper) {
+            Button { preview = wallpaper } label: {
                 WallpaperThumbnail(wallpaper: wallpaper)
             }
             .buttonStyle(.plain)

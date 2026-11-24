@@ -5,6 +5,7 @@ struct WallpaperDetailView: View {
     let wallpaper: Wallpaper
 
     @Environment(FavoritesStore.self) private var favorites
+    @Environment(\.dismiss) private var closePreview
     @State private var showInfo = false
     @State private var saveState: SaveState = .idle
 
@@ -36,9 +37,10 @@ struct WallpaperDetailView: View {
         .background(Color.white)
         .ignoresSafeArea()
         .navigationBarTitleDisplayMode(.inline)
-        // 大图页不需要主标签栏：隐藏它，底部只留本页的收藏 / 分享 / 保存。返回时系统自动恢复。
-        .toolbarVisibility(.hidden, for: .tabBar)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(role: .close) { closePreview() }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button("信息", systemImage: "info.circle") { showInfo = true }
             }

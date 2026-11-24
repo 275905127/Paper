@@ -34,9 +34,6 @@ struct SearchView: View {
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
             .navigationTitle("搜索")
-            .navigationDestination(for: Wallpaper.self) { wallpaper in
-                WallpaperDetailView(wallpaper: wallpaper)
-            }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("筛选", systemImage: "line.3.horizontal.decrease") {

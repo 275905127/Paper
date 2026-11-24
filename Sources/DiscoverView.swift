@@ -27,9 +27,6 @@ struct DiscoverView: View {
             .scrollEdgeEffectStyle(.soft, for: .top)
             .refreshable { await store.reset() }
             .navigationTitle(store.source.name)
-            .navigationDestination(for: Wallpaper.self) { wallpaper in
-                WallpaperDetailView(wallpaper: wallpaper)
-            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     sourceMenu
