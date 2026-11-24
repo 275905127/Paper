@@ -14,6 +14,7 @@ struct DiscoverView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
+                quickFilters
                 if store.items.isEmpty {
                     emptyState
                 } else {
@@ -59,6 +60,31 @@ struct DiscoverView: View {
                 }
             }
         }
+    }
+
+    private var quickFilters: some View {
+        let fields = store.source.filterFields.filter(\.quickAccess)
+        return HStack {
+            ForEach(fields) { field in
+                if case .choice(let options) = field.kind {
+                    Picker(field.title, selection: Binding(
+                        get: { store.query.filters.choice(field.id) ?? field.defaultValue.choice ?? "" },
+                        set: { value in
+                            guard store.query.filters.choice(field.id) != value else { return }
+                            var filters = store.query.filters
+                            filters.values[field.id] = .choice(value)
+                            store.applyFilters(filters)
+                            Task { await store.reset() }
+                        }
+                    )) {
+                        ForEach(options) { option in Text(option.title).tag(option.id) }
+                    }
+                    .pickerStyle(.menu)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
     }
 
     /// 图源切换菜单。只有一个图源时也保留，让结构一致。

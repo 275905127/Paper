@@ -33,6 +33,7 @@ struct WallpaperThumbnail: View {
 /// 原生没有瀑布流容器，这里用两列 `LazyVStack` 并排，
 /// 并把每张图分配给当前较矮的一列，让两列高度尽量接近。
 struct WallpaperGrid: View {
+    @Environment(FavoritesStore.self) private var favorites
     @State private var preview: Wallpaper?
     let items: [Wallpaper]
     var onReachEnd: ((Wallpaper) -> Void)?
@@ -96,6 +97,12 @@ struct WallpaperGrid: View {
                 WallpaperThumbnail(wallpaper: wallpaper)
             }
             .buttonStyle(.plain)
+            .contextMenu {
+                Button(favorites.contains(wallpaper) ? "移出收藏" : "收藏", systemImage: favorites.contains(wallpaper) ? "heart.slash" : "heart") {
+                    favorites.toggle(wallpaper)
+                }
+                ShareLink(item: wallpaper.url) { Label("分享来源链接", systemImage: "square.and.arrow.up") }
+            }
         }
     }
 }

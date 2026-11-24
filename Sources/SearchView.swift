@@ -6,6 +6,12 @@ struct SearchView: View {
     @Environment(CredentialStore.self) private var credentials
     @Environment(AppSettings.self) private var settings
     @State private var store: FeedStore
+    @AppStorage("paper.recentSearchTerms") private var historyData = Data()
+    @State private var confirmClear = false
+    private var history: [String] { (try? JSONDecoder().decode([String].self, from: historyData)) ?? [] }
+    private func saveHistory(_ terms: [String]) {
+        if let data = try? JSONEncoder().encode(Array(terms.prefix(12))) { historyData = data }
+    }
     @State private var text = ""
     @State private var showFilter = false
 
@@ -70,7 +76,25 @@ struct SearchView: View {
 
     private var suggestions: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("热门搜索")
+            if !history.isEmpty {
+                HStack {
+                    Text("最近搜索").font(.headline)
+                    Spacer()
+                    Button("清空") { confirmClear = true }
+                        .confirmationDialog("清空最近搜索？", isPresented: $confirmClear, titleVisibility: .visible) {
+                            Button("清空", role: .destructive) { saveHistory([]) }
+                        }
+                }.padding(.horizontal)
+                ForEach(history, id: \.self) { term in
+                    Button { text = term; run(term) } label: {
+                        Label(term, systemImage: "clock").frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .contextMenu {
+                        Button("移除此记录", systemImage: "trash", role: .destructive) { saveHistory(history.filter { $0 != term }) }
+                    }.padding(.horizontal)
+                }
+            }
+            Text("推荐搜索")
                 .font(.headline)
                 .padding(.horizontal)
             ForEach(["nature", "city", "space", "minimal", "cyberpunk", "mountain", "ocean", "anime"], id: \.self) { word in
@@ -88,7 +112,10 @@ struct SearchView: View {
     }
 
     private func run(_ keyword: String) {
-        store.query.keyword = keyword
+        let term = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
+        store.query.keyword = term
+        guard !term.isEmpty else { return }
+        saveHistory([term] + history.filter { $0.caseInsensitiveCompare(term) != .orderedSame })
         Task { await store.reset() }
     }
 }
