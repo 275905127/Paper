@@ -40,9 +40,9 @@ enum SourceProbe {
             return .manual("请输入不含凭据的公开 HTTPS 地址。")
         }
         if host == "wallhaven.cc" || host.hasSuffix(".wallhaven.cc") { return .builtinWallhaven }
-        let picsum = host == "picsum.photos" && ["", "/"].contains(url.path) && url.port == nil
-        var config = picsum ? JSONSourceConfig.picsum : JSONSourceConfig()
-        if !picsum { config.name = host; config.endpoint = url.absoluteString }
+        var config = JSONSourceConfig()
+        config.name = host
+        config.endpoint = url.absoluteString
         guard let endpoint = URL(string: config.endpoint) else { return .manual("接口地址无效。") }
 
         let settings = URLSessionConfiguration.ephemeral
@@ -74,7 +74,7 @@ enum SourceProbe {
         if let json = try? JSONSerialization.jsonObject(with: data) {
             return infer(json, config: config, base: base)
         }
-        guard !picsum, let source = CGImageSourceCreateWithData(data as CFData, nil), CGImageSourceGetCount(source) > 0,
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil), CGImageSourceGetCount(source) > 0,
               CGImageSourceGetStatus(source) == .statusComplete, let identifier = CGImageSourceGetType(source),
               let type = UTType(identifier as String), type.conforms(to: .image), let ext = type.preferredFilenameExtension,
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],

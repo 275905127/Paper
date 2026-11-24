@@ -41,15 +41,6 @@ struct SourceConfigEditor: View {
                         Text("JSON 列表").tag(false)
                         Text("随机直链").tag(true)
                     }
-                    if draft.randomImage == true {
-                        Button("填入 Luvbree 示例") {
-                            invalidateTest()
-                            draft.name = "Luvbree"
-                            draft.endpoint = "https://www.luvbree.com/api/image/random?isNsfw=false&isLandscape=false&type=1&imageType=compressed"
-                        }
-                    } else {
-                        Button("填入 Picsum 示例", action: fillExample)
-                    }
                     field("名称", \.name)
                     field("接口地址", \.endpoint).keyboardType(.URL)
                 } header: {
@@ -74,6 +65,7 @@ struct SourceConfigEditor: View {
                         field("页码参数名", \.pageParam)
                     }
                 }
+                filterSection
                 Section("测试图源") {
                     Button(draft.randomImage == true ? "测试随机图片" : "测试第一页") {
                         result = nil
@@ -109,6 +101,31 @@ struct SourceConfigEditor: View {
         }
     }
 
+    @ViewBuilder private var filterSection: some View {
+        Section {
+            ForEach($draft.customFilters.orEmpty) { $item in
+                NavigationLink {
+                    CustomFilterForm(item: $item) { invalidateTest() }
+                } label: {
+                    LabeledContent(item.title.isEmpty ? "未命名筛选" : item.title,
+                                   value: item.cleanParam.isEmpty ? "未填参数" : item.cleanParam)
+                }
+            }
+            .onDelete { offsets in
+                draft.customFilters?.remove(atOffsets: offsets)
+                invalidateTest()
+            }
+            Button("添加筛选项", systemImage: "plus") {
+                draft.customFilters = (draft.customFilters ?? []) + [CustomFilter()]
+                invalidateTest()
+            }
+        } header: {
+            Text("筛选项")
+        } footer: {
+            Text("每个筛选项对应请求里的一个查询参数，选择后附加到接口地址。留空的选项不会发送。")
+        }
+    }
+
     private func field(_ title: LocalizedStringKey, _ key: WritableKeyPath<JSONSourceConfig, String>) -> some View {
         LabeledContent(title) {
             TextField(title, text: Binding(get: { draft[keyPath: key] }, set: { text in
@@ -122,19 +139,6 @@ struct SourceConfigEditor: View {
     private func invalidateTest() {
         requestID = nil
         result = nil
-    }
-
-    private func fillExample() {
-        invalidateTest()
-        draft.name = "Picsum"
-        draft.endpoint = "https://picsum.photos/v2/list"
-        draft.listPath = ""
-        draft.imagePath = "download_url"
-        draft.thumbPath = "download_url"
-        draft.widthPath = "width"
-        draft.heightPath = "height"
-        draft.searchParam = ""
-        draft.pageParam = "page"
     }
 
     @MainActor private func test(_ config: JSONSourceConfig, id: UUID) async {
@@ -154,5 +158,69 @@ struct SourceConfigEditor: View {
         guard !Task.isCancelled, requestID == id else { return }
         result = message
         requestID = nil
+    }
+}
+
+private extension Binding where Value == [CustomFilter]? {
+    /// 把可空数组当作空数组编辑，供 ForEach 使用。
+    var orEmpty: Binding<[CustomFilter]> {
+        Binding<[CustomFilter]>(get: { wrappedValue ?? [] }, set: { wrappedValue = $0.isEmpty ? nil : $0 })
+    }
+}
+
+/// 单个筛选项的编辑页。
+private struct CustomFilterForm: View {
+    @Binding var item: CustomFilter
+    let onChange: () -> Void
+
+    var body: some View {
+        Form {
+            Section {
+                LabeledContent("名称") {
+                    TextField("例如 分级", text: $item.title).multilineTextAlignment(.trailing)
+                }
+                LabeledContent("参数名") {
+                    TextField("例如 rating", text: $item.param).multilineTextAlignment(.trailing)
+                }
+                Picker("类型", selection: $item.kind) {
+                    Text("单选").tag(CustomFilter.Kind.choice)
+                    Text("开关").tag(CustomFilter.Kind.toggle)
+                    Text("文本").tag(CustomFilter.Kind.text)
+                }
+            }
+            switch item.kind {
+            case .choice:
+                Section {
+                    ForEach($item.choices) { $choice in
+                        HStack {
+                            TextField("显示名", text: $choice.title)
+                            Divider()
+                            TextField("参数值", text: $choice.value).multilineTextAlignment(.trailing)
+                        }
+                    }
+                    .onDelete { item.choices.remove(atOffsets: $0) }
+                    Button("添加选项", systemImage: "plus") { item.choices.append(.init()) }
+                } header: {
+                    Text("选项")
+                } footer: {
+                    Text("参数值留空表示选择该项时不发送此参数，可用来表示“全部”。第一项为默认值。")
+                }
+            case .toggle:
+                Section {
+                    LabeledContent("打开时的值") {
+                        TextField("true", text: $item.onValue).multilineTextAlignment(.trailing)
+                    }
+                } footer: {
+                    Text("关闭时不发送此参数。")
+                }
+            case .text:
+                EmptyView()
+            }
+        }
+        .textInputAutocapitalization(.never)
+        .autocorrectionDisabled()
+        .navigationTitle(item.title.isEmpty ? "筛选项" : item.title)
+        .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: item) { onChange() }
     }
 }

@@ -12,20 +12,10 @@ struct JSONSourceConfig: Codable, Identifiable, Sendable {
     var heightPath = ""
     var searchParam = ""
     var pageParam = ""
+    /// 用户自定义的筛选项；旧配置没有这个字段，视为没有筛选。
+    var customFilters: [CustomFilter]?
 
     init() {}
-
-    static var picsum: Self {
-        var config = Self()
-        config.id = "AABBF038-DDB7-4ADF-92D4-C60B578EE868"
-        config.name = "Lorem Picsum"
-        config.endpoint = "https://picsum.photos/v2/list?limit=2"
-        config.imagePath = "download_url"
-        config.widthPath = "width"
-        config.heightPath = "height"
-        config.pageParam = "page"
-        return config
-    }
 }
 
 private func httpsURL(_ text: String, relativeTo base: URL? = nil) -> URL? {
@@ -52,7 +42,7 @@ struct JSONWallpaperSource: WallpaperSource {
     let summary = "公开 HTTPS JSON 图片列表"
     let symbol = "curlybraces"
     var homepage: URL { httpsURL(config.endpoint) ?? URL(string: "about:blank")! }
-    var filterFields: [FilterField] { [] }
+    var filterFields: [FilterField] { config.usableFilters.map(\.field) }
     private var searchKey: String { config.searchParam.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var pageKey: String { config.pageParam.trimmingCharacters(in: .whitespacesAndNewlines) }
     var capabilities: SourceCapabilities {
@@ -80,7 +70,11 @@ struct JSONWallpaperSource: WallpaperSource {
         guard searchKey.isEmpty || searchKey != pageKey else {
             throw SourceError.network("关键词和页码不能使用相同的参数名。")
         }
-        var params = (parts.queryItems ?? []).filter { $0.name != searchKey && $0.name != pageKey }
+        let extra = config.filterItems(for: query.filters, excluding: Set([searchKey, pageKey].filter { !$0.isEmpty }))
+        let extraNames = Set(extra.map(\.name))
+        // 用户选过的筛选参数覆盖地址里原有的同名参数。
+        var params = (parts.queryItems ?? []).filter { $0.name != searchKey && $0.name != pageKey && !extraNames.contains($0.name) }
+        params.append(contentsOf: extra)
         let keyword = query.keyword.trimmingCharacters(in: .whitespacesAndNewlines)
         if !searchKey.isEmpty && !keyword.isEmpty { params.append(.init(name: searchKey, value: keyword)) }
         if !pageKey.isEmpty { params.append(.init(name: pageKey, value: String(max(1, number)))) }
@@ -143,5 +137,71 @@ struct JSONWallpaperSource: WallpaperSource {
         let raw = value(path, in: row)
         let text = (raw as? String) ?? (raw as? NSNumber)?.stringValue
         return max(0, text.flatMap { Int($0) } ?? 0)
+    }
+}
+
+/// 用户为自定义图源声明的一个筛选项，对应请求里的一个查询参数。
+struct CustomFilter: Codable, Identifiable, Hashable, Sendable {
+    enum Kind: String, Codable, CaseIterable, Sendable { case choice, toggle, text }
+    struct Choice: Codable, Identifiable, Hashable, Sendable {
+        var id = UUID().uuidString
+        var title = ""
+        var value = ""
+    }
+
+    var id = UUID().uuidString
+    var title = ""
+    var param = ""
+    var kind = Kind.choice
+    var choices: [Choice] = []
+    /// 开关打开时发送的值；关闭时不发送。
+    var onValue = "true"
+
+    var cleanParam: String { param.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var isUsable: Bool {
+        guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !cleanParam.isEmpty else { return false }
+        return kind != .choice || choices.contains { !$0.title.isEmpty }
+    }
+
+    /// 转成界面通用的筛选声明。
+    var field: FilterField {
+        switch kind {
+        case .choice:
+            let options = choices.filter { !$0.title.isEmpty }.map { FilterField.Option(id: $0.id, title: $0.title) }
+            return FilterField(id: id, title: title, kind: .choice(options),
+                               defaultValue: .choice(options.first?.id ?? ""))
+        case .toggle:
+            return FilterField(id: id, title: title, kind: .toggle, defaultValue: .flag(false))
+        case .text:
+            return FilterField(id: id, title: title, kind: .text(prompt: title, keyboard: .plain),
+                               defaultValue: .text(""))
+        }
+    }
+
+    /// 当前取值对应要附加的查询参数；空值不发送。
+    func queryItem(for state: FilterState) -> URLQueryItem? {
+        switch kind {
+        case .choice:
+            guard let picked = state.choice(id), let choice = choices.first(where: { $0.id == picked }),
+                  !choice.value.isEmpty else { return nil }
+            return URLQueryItem(name: cleanParam, value: choice.value)
+        case .toggle:
+            guard state.flag(id) == true else { return nil }
+            return URLQueryItem(name: cleanParam, value: onValue)
+        case .text:
+            let text = (state.text(id) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            return text.isEmpty ? nil : URLQueryItem(name: cleanParam, value: text)
+        }
+    }
+}
+
+extension JSONSourceConfig {
+    var usableFilters: [CustomFilter] { (customFilters ?? []).filter(\.isUsable) }
+
+    /// 把筛选值附加到请求参数；与关键词、页码同名的参数以它们为准。
+    func filterItems(for state: FilterState, excluding reserved: Set<String>) -> [URLQueryItem] {
+        let filters = usableFilters
+        let filled = state.filled(with: filters.map(\.field))
+        return filters.compactMap { reserved.contains($0.cleanParam) ? nil : $0.queryItem(for: filled) }
     }
 }

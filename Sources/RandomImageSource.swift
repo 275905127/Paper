@@ -10,7 +10,7 @@ struct RandomImageSource: WallpaperSource {
     let summary = "每次刷新获取一张公开 HTTPS 图片"
     let symbol = "shuffle"
     var capabilities: SourceCapabilities { [] }
-    var filterFields: [FilterField] { [] }
+    var filterFields: [FilterField] { config.usableFilters.map(\.field) }
     private var endpoint: URL? {
         URL(string: config.endpoint.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap(publicHTTPS)
     }
@@ -33,23 +33,35 @@ struct RandomImageSource: WallpaperSource {
         return URLSession(configuration: c, delegate: PublicImageRequests(), delegateQueue: nil)
     }()
 
-    func page(_ number: Int, query _: Query, credential _: String?) async throws -> SourcePage {
-        try Task.checkCancellation()
-        guard number == 1 else { return SourcePage(items: [], hasMore: false) }
-        guard let endpoint else { throw SourceError.network("请输入不含账号密码的 HTTPS 图片地址。") }
+    /// 把用户选的筛选参数附加到入口地址，覆盖同名参数。
+    private func requestURL(_ base: URL, filters: FilterState) -> URL {
+        let extra = config.filterItems(for: filters, excluding: [])
+        guard !extra.isEmpty, var parts = URLComponents(url: base, resolvingAgainstBaseURL: false) else { return base }
+        let names = Set(extra.map(\.name))
+        parts.queryItems = (parts.queryItems ?? []).filter { !names.contains($0.name) } + extra
+        parts.percentEncodedQuery = parts.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
+        return parts.url.flatMap(publicHTTPS) ?? base
+    }
+
+    struct BlockedByChallenge: Error {}
+
+    /// 普通 HTTPS 取图。403 且返回网页时视为被人机验证拦截。
+    private func fetch(_ endpoint: URL) async throws -> Data {
         let (bytes, response) = try await Self.session.bytes(for: PublicImageRequests.request(endpoint))
         defer { bytes.task.cancel() }
         guard let http = response as? HTTPURLResponse, http.url.flatMap(publicHTTPS) != nil else {
             throw SourceError.network("图片响应不是公开 HTTPS 响应。")
         }
+        let isHTML = ["text/html", "application/xhtml+xml"].contains(http.mimeType?.lowercased() ?? "")
         switch http.statusCode {
         case 200: break
-        case 403: throw SourceError.network("服务器拒绝访问（403）。请选择可公开直连的图片接口。")
+        case 403 where isHTML: throw BlockedByChallenge()
+        case 403: throw SourceError.network("服务器拒绝访问（403）。")
         case 300..<400: throw SourceError.network("未取得图片：重定向目标必须是无账号密码的 HTTPS 地址。")
         default: throw SourceError.badResponse(http.statusCode)
         }
-        let html = SourceError.network("接口返回 HTML 网页而非图片；不支持登录或验证页面。")
-        if ["text/html", "application/xhtml+xml"].contains(http.mimeType?.lowercased() ?? "") { throw html }
+        let html = SourceError.network("接口返回 HTML 网页而非图片；不支持登录页面。")
+        if isHTML { throw html }
         let limit = 16 * 1024 * 1024
         let tooLarge = SourceError.network("图片超过 16 MiB 下载上限。")
         guard http.expectedContentLength <= Int64(limit) else { throw tooLarge }
@@ -62,6 +74,22 @@ struct RandomImageSource: WallpaperSource {
         try Task.checkCancellation()
         let prefix = String(decoding: data.prefix(1024), as: UTF8.self).lowercased()
         if prefix.contains("<!doctype html") || prefix.contains("<html") { throw html }
+        return data
+    }
+
+    func page(_ number: Int, query: Query, credential _: String?) async throws -> SourcePage {
+        try Task.checkCancellation()
+        guard number == 1 else { return SourcePage(items: [], hasMore: false) }
+        guard let base = endpoint else { throw SourceError.network("请输入不含账号密码的 HTTPS 图片地址。") }
+        let endpoint = requestURL(base, filters: query.filters)
+        let data: Data
+        do {
+            data = try await fetch(endpoint)
+        } catch let blocked as BlockedByChallenge {
+            // 普通请求被站点的人机验证拦下时，改由后台网页环境取图；界面仍是原生的。
+            _ = blocked
+            data = try await WebImageFetcher.fetch(endpoint)
+        }
         let options = [kCGImageSourceShouldCache: false] as CFDictionary
         guard let image = CGImageSourceCreateWithData(data as CFData, options),
               CGImageSourceGetStatus(image) == .statusComplete,
