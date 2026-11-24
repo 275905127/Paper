@@ -12,15 +12,23 @@ struct SourcesView: View {
     var body: some View {
         NavigationStack {
             List {
-                ForEach(settings.allSources, id: \.id) { source in
-                    Section {
+                Section {
+                    ForEach(settings.allSources, id: \.id) { source in
                         row(for: source)
-                        if let config = settings.configs.first(where: { $0.id == source.id }) {
-                            Button("编辑接口", systemImage: "slider.horizontal.3") { editor = config }
-                                .swipeActions { Button("删除", role: .destructive) { removing = config } }
-                            Button("移除图源", role: .destructive) { removing = config }
-                        }
+                            .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                                if source.credential != nil {
+                                    Button("API 密钥", systemImage: "key") { editing = source }
+                                        .tint(.blue)
+                                }
+                                if let config = settings.configs.first(where: { $0.id == source.id }) {
+                                    Button("编辑", systemImage: "slider.horizontal.3") { editor = config }
+                                        .tint(.blue)
+                                    Button("移除", systemImage: "trash", role: .destructive) { removing = config }
+                                }
+                            }
                     }
+                } footer: {
+                    Text("轻点切换图源，向右滑动显示管理操作。")
                 }
 
                 Section {
@@ -73,24 +81,10 @@ struct SourcesView: View {
                     Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
                 }
             }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-
-        if let spec = source.credential {
-            Button {
-                editing = source
-            } label: {
-                LabeledContent {
-                    Text(credentials.isSet(source.id) ? "已设置" : "未设置")
-                        .foregroundStyle(.secondary)
-                } label: {
-                    Label(spec.label, systemImage: "key")
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityHint("管理此图源的密钥")
-        }
+        .accessibilityAddTraits(isCurrent ? .isSelected : [])
     }
 }
 
