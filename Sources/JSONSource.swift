@@ -4,6 +4,7 @@ struct JSONSourceConfig: Codable, Identifiable, Sendable {
     var id = UUID().uuidString
     var name = ""
     var endpoint = ""
+    var randomImage: Bool? // 旧配置没有这个字段，仍使用 JSON 列表。
     var listPath = "" // 空字符串表示根数组；例如 data.items 表示嵌套数组。
     var imagePath = "url"
     var thumbPath = ""

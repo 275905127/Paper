@@ -13,7 +13,12 @@ final class AppSettings {
 
     private(set) var configs: [JSONSourceConfig] = []
     private(set) var revision = 0
-    var allSources: [any WallpaperSource] { SourceCatalog.all + configs.map { JSONWallpaperSource(config: $0) as any WallpaperSource } }
+    var allSources: [any WallpaperSource] {
+        SourceCatalog.all + configs.map { config -> any WallpaperSource in
+            if config.randomImage == true { return RandomImageSource(config: config) }
+            return JSONWallpaperSource(config: config)
+        }
+    }
     func source(id: String) -> (any WallpaperSource)? { allSources.first { $0.id == id } }
     func save(_ config: JSONSourceConfig) {
         if let i = configs.firstIndex(where: { $0.id == config.id }) { configs[i] = config }

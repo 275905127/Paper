@@ -38,7 +38,7 @@ struct FavoritesView: View {
                         }
                     }
                     ToolbarItem(placement: .bottomBar) {
-                        ShareLink(items: selected.map(\.url)) { Label("分享所选壁纸链接", systemImage: "square.and.arrow.up") }
+                        ShareLink(items: selected.map(\.shareItem)) { Label("分享所选壁纸", systemImage: "square.and.arrow.up") }
                             .disabled(selection.isEmpty)
                     }
                     ToolbarSpacer(.flexible, placement: .bottomBar)

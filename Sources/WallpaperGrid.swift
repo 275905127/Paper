@@ -8,7 +8,7 @@ struct WallpaperThumbnail: View {
         Color.clear
             .aspectRatio(wallpaper.aspectRatio, contentMode: .fit)
             .overlay {
-                AsyncImage(url: wallpaper.thumbLarge) { phase in
+                SnapshotImage(url: wallpaper.thumbLarge, maxPixels: 800) { phase in
                     switch phase {
                     case .success(let image):
                         // 格子比例与图片比例一致，用 fill 填满，避免露出底色。
@@ -101,7 +101,7 @@ struct WallpaperGrid: View {
                 Button(favorites.contains(wallpaper) ? "移出收藏" : "收藏", systemImage: favorites.contains(wallpaper) ? "heart.slash" : "heart") {
                     favorites.toggle(wallpaper)
                 }
-                ShareLink(item: wallpaper.url) { Label("分享来源链接", systemImage: "square.and.arrow.up") }
+                ShareLink(item: wallpaper.shareItem) { Label(wallpaper.path.isFileURL ? "分享图片" : "分享来源链接", systemImage: "square.and.arrow.up") }
             }
         }
     }

@@ -24,6 +24,8 @@ struct Wallpaper: Identifiable, Hashable, Codable, Sendable {
         height > 0 ? Double(width) / Double(height) : 0.5625
     }
 
+    var shareItem: URL { path.isFileURL ? path : url }
+
     var resolution: String { "\(width) × \(height)" }
 
     init(id: String, url: URL, path: URL, thumbLarge: URL, thumbSmall: URL,
@@ -42,13 +44,13 @@ struct Wallpaper: Identifiable, Hashable, Codable, Sendable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
         url = try c.decode(URL.self, forKey: .url)
-        path = try c.decode(URL.self, forKey: .path)
+        path = RandomImageSource.relocated(try c.decode(URL.self, forKey: .path))
         // 旧版收藏存的是固定 16:9 的 /lg/ 缩略图，会把竖图压扁；
         // Wallhaven 的 /orig/ 缩略图与 /lg/ 路径结构相同，直接换段即可得到保持比例的版本。
         let storedThumb = try c.decode(URL.self, forKey: .thumbLarge)
         let upgraded = storedThumb.absoluteString.replacingOccurrences(of: "/lg/", with: "/orig/")
-        thumbLarge = URL(string: upgraded) ?? storedThumb
-        thumbSmall = try c.decode(URL.self, forKey: .thumbSmall)
+        thumbLarge = RandomImageSource.relocated(URL(string: upgraded) ?? storedThumb)
+        thumbSmall = RandomImageSource.relocated(try c.decode(URL.self, forKey: .thumbSmall))
         width = try c.decode(Int.self, forKey: .width)
         height = try c.decode(Int.self, forKey: .height)
         fileSize = try c.decode(Int.self, forKey: .fileSize)

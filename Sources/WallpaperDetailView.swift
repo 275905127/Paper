@@ -16,7 +16,7 @@ struct WallpaperDetailView: View {
 
     var body: some View {
         ZoomableImage(aspectRatio: CGFloat(wallpaper.aspectRatio)) {
-            AsyncImage(url: wallpaper.path) { phase in
+            SnapshotImage(url: wallpaper.path, maxPixels: 4096) { phase in
                 switch phase {
                 case .success(let image):
                     image.resizable().scaledToFit()
@@ -24,12 +24,12 @@ struct WallpaperDetailView: View {
                     ContentUnavailableView("原图加载失败", systemImage: "photo.badge.exclamationmark")
                 default:
                     // 原图较大时，先显示已缓存的缩略图兜底
-                    AsyncImage(url: wallpaper.thumbLarge) { thumb in
+                    if !wallpaper.path.isFileURL { AsyncImage(url: wallpaper.thumbLarge) { thumb in
                         thumb.resizable().scaledToFit()
                     } placeholder: {
                         Color.clear
                     }
-                    .overlay { ProgressView() }
+                    .overlay { ProgressView() } } else { ProgressView() }
                 }
             }
         }
@@ -55,7 +55,7 @@ struct WallpaperDetailView: View {
 
                 Spacer()
 
-                ShareLink(item: wallpaper.url) {
+                ShareLink(item: wallpaper.shareItem) {
                     Label("分享", systemImage: "square.and.arrow.up")
                 }
 

@@ -14,7 +14,11 @@ struct DiscoverView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                if store.items.isEmpty {
+                if store.source is RandomImageSource, let item = store.items.first {
+                    WallpaperGrid(items: [item])
+                    Button("换一张", systemImage: "arrow.clockwise") { Task { await store.reset() } }
+                        .buttonStyle(.bordered).padding()
+                } else if store.items.isEmpty {
                     emptyState
                 } else {
                     WallpaperGrid(

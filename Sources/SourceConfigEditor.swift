@@ -34,7 +34,22 @@ struct SourceConfigEditor: View {
         NavigationStack {
             Form {
                 Section {
-                    Button("填入 Picsum 示例", action: fillExample)
+                    Picker("类型", selection: Binding(get: { draft.randomImage == true }, set: { random in
+                        draft.randomImage = random ? true : nil
+                        invalidateTest()
+                    })) {
+                        Text("JSON 列表").tag(false)
+                        Text("随机直链").tag(true)
+                    }
+                    if draft.randomImage == true {
+                        Button("填入 Luvbree 示例") {
+                            invalidateTest()
+                            draft.name = "Luvbree"
+                            draft.endpoint = "https://www.luvbree.com/api/image/random?isNsfw=false&isLandscape=false&type=1&imageType=compressed"
+                        }
+                    } else {
+                        Button("填入 Picsum 示例", action: fillExample)
+                    }
                     field("名称", \.name)
                     field("接口地址", \.endpoint).keyboardType(.URL)
                 } header: {
@@ -42,28 +57,32 @@ struct SourceConfigEditor: View {
                 } footer: {
                     if let validationError { Text(validationError) }
                 }
-                Section {
-                    field("列表路径", \.listPath)
-                    field("原图地址路径", \.imagePath)
-                    field("缩略图地址路径", \.thumbPath)
-                    field("宽度路径", \.widthPath)
-                    field("高度路径", \.heightPath)
-                } header: {
-                    Text("JSON 字段映射")
-                } footer: {
-                    Text("若 JSON 顶层就是数组，列表路径请留空。其余路径相对于每条记录。")
-                }
-                Section("请求参数") {
-                    field("搜索参数名", \.searchParam)
-                    field("页码参数名", \.pageParam)
+                if draft.randomImage != true {
+                    Section {
+                        field("列表路径", \.listPath)
+                        field("原图地址路径", \.imagePath)
+                        field("缩略图地址路径", \.thumbPath)
+                        field("宽度路径", \.widthPath)
+                        field("高度路径", \.heightPath)
+                    } header: {
+                        Text("JSON 字段映射")
+                    } footer: {
+                        Text("若 JSON 顶层就是数组，列表路径请留空。其余路径相对于每条记录。")
+                    }
+                    Section("请求参数") {
+                        field("搜索参数名", \.searchParam)
+                        field("页码参数名", \.pageParam)
+                    }
                 }
                 Section("测试图源") {
-                    Button("测试第一页") {
+                    Button(draft.randomImage == true ? "测试随机图片" : "测试第一页") {
                         result = nil
                         requestID = UUID()
                     }
                     .disabled(validationError != nil || requestID != nil)
-                    if requestID != nil { ProgressView("正在请求第一页…") }
+                    if requestID != nil {
+                        ProgressView(draft.randomImage == true ? "正在请求图片…" : "正在请求第一页…")
+                    }
                     if let result { Text(result) }
                 }
             }
@@ -121,8 +140,14 @@ struct SourceConfigEditor: View {
     @MainActor private func test(_ config: JSONSourceConfig, id: UUID) async {
         let message: String
         do {
-            let page = try await JSONWallpaperSource(config: config).page(1, query: Query(), credential: nil)
-            message = page.items.isEmpty ? "第一页未解析到壁纸，请检查列表和原图路径。" : "第一页已解析 \(page.items.count) 张壁纸。"
+            if config.randomImage == true {
+                let page = try await RandomImageSource(config: config).page(1, query: Query(), credential: nil)
+                guard let image = page.items.first else { throw SourceError.network("接口未返回图片。") }
+                message = "图片尺寸：\(image.resolution) 像素。"
+            } else {
+                let page = try await JSONWallpaperSource(config: config).page(1, query: Query(), credential: nil)
+                message = page.items.isEmpty ? "第一页未解析到壁纸，请检查列表和原图路径。" : "第一页已解析 \(page.items.count) 张壁纸。"
+            }
         } catch {
             message = "测试失败：\(error.localizedDescription)"
         }
