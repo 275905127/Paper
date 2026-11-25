@@ -47,6 +47,7 @@ struct SearchView: View {
             }
             .onAppear { initialDrawer = true }
             .scrollEdgeEffectStyle(.soft, for: .top)
+            .minimizingNavigationBarOnScroll()
             .navigationTitle("搜索")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -97,7 +98,9 @@ struct SearchView: View {
                 }.padding(.horizontal)
                 ForEach(history, id: \.self) { term in
                     Button { text = term; run(term) } label: {
-                        Label(term, systemImage: "clock").frame(maxWidth: .infinity, alignment: .leading)
+                        Label(term, systemImage: "clock")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .multilineTextAlignment(.leading)
                     }
                     .contextMenu {
                         Button("移除此记录", systemImage: "trash", role: .destructive) { saveHistory(history.filter { $0 != term }) }

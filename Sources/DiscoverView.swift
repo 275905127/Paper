@@ -16,8 +16,22 @@ struct DiscoverView: View {
             ScrollView {
                 if store.source is RandomImageSource, let item = store.items.first {
                     WallpaperGrid(items: [item])
-                    Button("换一张", systemImage: "arrow.clockwise") { Task { await store.reset() } }
-                        .buttonStyle(.bordered).padding()
+                        .id(item.id)
+                        .transition(.opacity.combined(with: .scale(scale: 0.97)))
+                    Button {
+                        Task { await store.reset() }
+                    } label: {
+                        if store.isLoading {
+                            ProgressView()
+                        } else {
+                            Label("换一张", systemImage: "arrow.clockwise")
+                                .symbolEffect(.bounce, value: item.id)
+                        }
+                    }
+                    .buttonStyle(.glass)
+                    .disabled(store.isLoading)
+                    .padding()
+                    .sensoryFeedback(.impact(weight: .light), trigger: item.id)
                 } else if store.items.isEmpty {
                     emptyState
                 } else {
@@ -29,6 +43,8 @@ struct DiscoverView: View {
                 }
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
+            .minimizingNavigationBarOnScroll()
+            .animation(.smooth, value: store.items.first?.id)
             .refreshable { await store.reset() }
             .navigationTitle(store.source.name)
             .toolbar {

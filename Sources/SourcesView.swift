@@ -77,23 +77,30 @@ struct SourcesView: View {
             HStack {
                 Label {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(source.name).foregroundStyle(.primary)
+                        Text(source.name)
+                            .foregroundStyle(.primary)
+                            .lineLimit(2)
                         Text(source.summary)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
+                            .lineLimit(3)
                     }
                 } icon: {
                     Image(systemName: source.symbol)
                 }
                 Spacer()
                 if isCurrent {
-                    Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(Color.accentColor)
+                        .transition(.opacity.combined(with: .scale))
                 }
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isCurrent ? .isSelected : [])
+        .animation(.smooth, value: isCurrent)
+        .sensoryFeedback(.selection, trigger: isCurrent)
     }
 }
 

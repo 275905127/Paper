@@ -13,18 +13,42 @@ struct WallpaperThumbnail: View {
                     case .success(let image):
                         // 格子比例与图片比例一致，用 fill 填满，避免露出底色。
                         image.resizable().scaledToFill()
+                            .transition(.opacity)
                     case .failure:
                         Image(systemName: "photo")
                             .font(.title)
                             .foregroundStyle(.secondary)
                     default:
-                        ProgressView()
+                        // 有主色就用主色占位，减少加载时的闪烁；没有则用系统占位色。
+                        placeholder
                     }
                 }
+                .animation(.easeOut(duration: 0.25), value: wallpaper.id)
             }
             .background(.quaternary)
-            .clipShape(.rect(cornerRadius: 14))
-            .accessibilityLabel("壁纸 \(wallpaper.resolution)")
+            .clipShape(.rect(cornerRadius: Self.cornerRadius, style: .continuous))
+            .contentShape(.rect(cornerRadius: Self.cornerRadius, style: .continuous))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(accessibilityText)
+            .accessibilityAddTraits(.isImage)
+    }
+
+    /// 与屏幕边距协调的连续圆角（同心：外层是屏幕圆角，内层随边距缩小）。
+    static let cornerRadius: CGFloat = 20
+
+    @ViewBuilder
+    private var placeholder: some View {
+        if let hex = wallpaper.colors.first, let color = Color(hex: hex) {
+            color.opacity(0.35)
+        } else {
+            Color.clear
+        }
+    }
+
+    private var accessibilityText: String {
+        var parts = ["壁纸", wallpaper.resolution]
+        if !wallpaper.category.isEmpty { parts.append(wallpaper.category) }
+        return parts.joined(separator: "，")
     }
 }
 
@@ -35,6 +59,8 @@ struct WallpaperThumbnail: View {
 struct WallpaperGrid: View {
     @Environment(FavoritesStore.self) private var favorites
     @State private var preview: Wallpaper?
+    @Namespace private var zoom
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let items: [Wallpaper]
     var onReachEnd: ((Wallpaper) -> Void)?
     var selection: Binding<Set<String>>?
@@ -49,13 +75,17 @@ struct WallpaperGrid: View {
                     ForEach(columns[index]) { wallpaper in
                         cell(for: wallpaper)
                             .onAppear { onReachEnd?(wallpaper) }
+                            .transition(.opacity.combined(with: .scale(scale: 0.96)))
                     }
                 }
             }
         }
         .padding(.horizontal, 12)
+        // 追加和移除用淡入缩放，减弱动态效果开启时改为简单淡入。
+        .animation(reduceMotion ? .easeOut(duration: 0.15) : .smooth, value: items.count)
         .fullScreenCover(item: $preview) { item in
             NavigationStack { WallpaperDetailView(wallpaper: item) }
+                .navigationTransition(.zoom(sourceID: item.id, in: zoom))
         }
     }
 
@@ -86,9 +116,20 @@ struct WallpaperGrid: View {
                     .overlay(alignment: .bottomTrailing) {
                         Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                             .font(.title2)
-                            .foregroundStyle(isSelected ? Color.accentColor : .white)
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(isSelected ? Color.white : Color.white, isSelected ? Color.accentColor : Color.black.opacity(0.25))
+                            .contentTransition(.symbolEffect(.replace))
+                            .symbolEffect(.bounce, value: isSelected)
                             .padding(8)
                     }
+                    .overlay {
+                        // 选中时整张图略微压暗并描边，不只靠右下角一个小图标。
+                        RoundedRectangle(cornerRadius: WallpaperThumbnail.cornerRadius, style: .continuous)
+                            .strokeBorder(isSelected ? Color.accentColor : .clear, lineWidth: 3)
+                    }
+                    .scaleEffect(isSelected ? 0.97 : 1)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.75), value: isSelected)
+                    .sensoryFeedback(.selection, trigger: isSelected)
             }
             .buttonStyle(.plain)
             .accessibilityAddTraits(isSelected ? .isSelected : [])
@@ -97,6 +138,7 @@ struct WallpaperGrid: View {
                 WallpaperThumbnail(wallpaper: wallpaper)
             }
             .buttonStyle(.plain)
+            .matchedTransitionSource(id: wallpaper.id, in: zoom)
             .contextMenu {
                 Button(favorites.contains(wallpaper) ? "移出收藏" : "收藏", systemImage: favorites.contains(wallpaper) ? "heart.slash" : "heart") {
                     favorites.toggle(wallpaper)

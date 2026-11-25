@@ -38,6 +38,7 @@ struct RootView: View {
                 SearchView(credentials: credentials, source: settings.selectedSource)
             }
         }
+        .tabBarMinimizeBehavior(.onScrollDown)
         .sensoryFeedback(.selection, trigger: page)
     }
 }
