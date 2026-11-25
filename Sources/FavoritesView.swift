@@ -28,6 +28,7 @@ struct FavoritesView: View {
                 }
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
+            .minimizingNavigationBarOnScroll()
             .navigationTitle("收藏")
             .toolbarVisibility(isEditing ? .hidden : .automatic, for: .tabBar)
             .toolbar {

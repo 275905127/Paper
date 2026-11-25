@@ -8,6 +8,8 @@ struct WallpaperDetailView: View {
     @Environment(\.dismiss) private var closePreview
     @State private var showInfo = false
     @State private var saveState: SaveState = .idle
+    /// 下拉关闭的进度，用来让背景和工具栏随手势渐隐。
+    @State private var dismissProgress: CGFloat = 0
 
     enum SaveState: Equatable {
         case idle, saving, saved
@@ -15,7 +17,9 @@ struct WallpaperDetailView: View {
     }
 
     var body: some View {
-        ZoomableImage(aspectRatio: CGFloat(wallpaper.aspectRatio)) {
+        ZoomableImage(aspectRatio: CGFloat(wallpaper.aspectRatio),
+                      dismissProgress: $dismissProgress,
+                      onDismiss: { closePreview() }) {
             SnapshotImage(url: wallpaper.path, maxPixels: 4096) { phase in
                 switch phase {
                 case .success(let image):
@@ -34,8 +38,12 @@ struct WallpaperDetailView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.white)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("壁纸大图，\(wallpaper.resolution)")
+        // 跟随系统外观：浅色为白，深色为黑；下拉时背景随进度变透明，露出下层内容。
+        .background(.background.opacity(1 - dismissProgress * 0.85))
         .ignoresSafeArea()
+        .toolbarVisibility(dismissProgress > 0.02 ? .hidden : .automatic, for: .navigationBar, .bottomBar)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -51,6 +59,8 @@ struct WallpaperDetailView: View {
                 ) {
                     favorites.toggle(wallpaper)
                 }
+                .symbolEffect(.bounce, value: favorites.contains(wallpaper))
+                .contentTransition(.symbolEffect(.replace))
                 .sensoryFeedback(.selection, trigger: favorites.contains(wallpaper))
 
                 Spacer()
@@ -62,6 +72,7 @@ struct WallpaperDetailView: View {
                 Spacer()
 
                 Button(saveTitle, systemImage: saveSymbol) { save() }
+                    .contentTransition(.symbolEffect(.replace))
                     .disabled(saveState == .saving)
             }
         }
@@ -149,6 +160,7 @@ struct InfoSheet: View {
                     Text("iOS 不允许第三方 App 直接设置壁纸，需要在系统设置中完成最后一步。")
                 }
             }
+            .dynamicTypeSize(...DynamicTypeSize.accessibility3)
             .navigationTitle("壁纸信息")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -24,6 +24,7 @@ struct FilterSheet: View {
                     FieldSection(field: field, state: $state, hasCredential: hasCredential)
                 }
             }
+            .dynamicTypeSize(...DynamicTypeSize.accessibility3)
             .navigationTitle("筛选")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
