@@ -18,6 +18,7 @@ struct DiscoverView: View {
                     WallpaperGrid(items: [item])
                         .id(item.id)
                         .transition(.opacity.combined(with: .scale(scale: 0.97)))
+                        .animation(.smooth, value: item.id)
                     Button {
                         Task { await store.reset() }
                     } label: {
@@ -44,9 +45,9 @@ struct DiscoverView: View {
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
             .minimizingNavigationBarOnScroll()
-            .animation(.smooth, value: store.items.first?.id)
             .refreshable { await store.reset() }
             .navigationTitle(store.source.name)
+            .transaction(value: store.source.id) { $0.animation = nil }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     sourceMenu
